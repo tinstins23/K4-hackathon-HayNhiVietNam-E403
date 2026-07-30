@@ -1,0 +1,1268 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Discord AI Schedule Assistant - Intelligence & Planning Prototype</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #313338;
+            --bg-secondary: #2b2d31;
+            --bg-tertiary: #1e1f22;
+            --bg-accent: #5865f2;
+            --bg-accent-hover: #4752c4;
+            --text-normal: #dbdee1;
+            --text-muted: #949ba4;
+            --text-heading: #f2f3f5;
+            --border-color: #3f4147;
+            --card-bg: #2b2d31;
+            --card-border: #383a40;
+            --tag-mandatory: #ed4245;
+            --tag-optional: #57f287;
+            --tag-deadline: #fee75c;
+            --tag-canceled: #949ba4;
+            --role-instructor: #f1c40f;
+            --role-coach: #2ecc71;
+            --disabled-input-bg: #2b2d31;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-tertiary);
+            color: var(--text-normal);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Server Sidebar Icon Strip */
+        .server-strip {
+            width: 72px;
+            background-color: var(--bg-tertiary);
+            padding: 12px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+            border-right: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .discord-home-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background-color: var(--bg-accent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-radius 0.2s, background-color 0.2s, transform 0.2s;
+        }
+
+        .discord-home-btn:hover {
+            border-radius: 16px;
+            background-color: var(--bg-accent-hover);
+            transform: scale(1.05);
+        }
+
+        .discord-logo-svg {
+            width: 28px;
+            height: 28px;
+            fill: white;
+        }
+
+        .server-separator {
+            width: 32px;
+            height: 2px;
+            background-color: #35363c;
+            border-radius: 1px;
+        }
+
+        .server-badge {
+            width: 48px;
+            height: 48px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #5865f2, #eb459e);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 15px;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            position: relative;
+        }
+
+        .server-badge::before {
+            content: '';
+            position: absolute;
+            left: -12px;
+            top: 12px;
+            width: 4px;
+            height: 24px;
+            background: white;
+            border-radius: 0 4px 4px 0;
+        }
+
+        /* Left Navigation Sidebar */
+        .sidebar {
+            width: 240px;
+            background-color: var(--bg-secondary);
+            display: flex;
+            flex-direction: column;
+            border-right: 1px solid var(--border-color);
+        }
+
+        .server-header {
+            padding: 16px;
+            font-weight: 700;
+            color: var(--text-heading);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 15px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        .channel-category {
+            padding: 16px 12px 6px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .channel-list {
+            padding: 0 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .channel-item {
+            padding: 7px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+            font-size: 14px;
+            transition: background 0.15s, color 0.15s;
+        }
+
+        .channel-item:hover {
+            background-color: rgba(255, 255, 255, 0.05);
+            color: var(--text-normal);
+        }
+
+        .channel-item.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-heading);
+            font-weight: 600;
+        }
+
+        .channel-svg-icon {
+            width: 18px;
+            height: 18px;
+            fill: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .channel-item.active .channel-svg-icon,
+        .channel-item:hover .channel-svg-icon {
+            fill: var(--text-heading);
+        }
+
+        /* User Profile Strip */
+        .user-strip {
+            margin-top: auto;
+            background-color: #232428;
+            padding: 8px 10px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .user-left-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .user-avatar-container {
+            position: relative;
+        }
+
+        .user-avatar-mini {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: #5865f2;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            background-color: #23a55a;
+            border-radius: 50%;
+            position: absolute;
+            bottom: -1px;
+            right: -1px;
+            border: 2px solid #232428;
+        }
+
+        .user-meta {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-meta-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-heading);
+        }
+
+        .user-meta-role {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .user-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .ctrl-btn {
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            cursor: pointer;
+            color: var(--text-muted);
+        }
+
+        .ctrl-btn:hover {
+            background-color: rgba(255, 255, 255, 0.07);
+            color: var(--text-normal);
+        }
+
+        /* Main Chat Canvas */
+        .main-chat {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: var(--bg-primary);
+        }
+
+        .chat-header {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background-color: var(--bg-primary);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        }
+
+        .chat-header h3 {
+            color: var(--text-heading);
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .chat-header .topic {
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: normal;
+            border-left: 1px solid var(--border-color);
+            padding-left: 12px;
+        }
+
+        /* Admin Demo Action Controls Banner */
+        .admin-action-bar {
+            background: rgba(87, 242, 135, 0.1);
+            border-bottom: 1px solid rgba(87, 242, 135, 0.25);
+            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .admin-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: #57f287;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+
+        .admin-btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .btn-demo-admin {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: var(--text-heading);
+            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .btn-demo-admin:hover {
+            background: #57f287;
+            color: black;
+            font-weight: 600;
+        }
+
+        .btn-demo-admin.active-posted {
+            background: #23a55a;
+            color: white;
+            border-color: #23a55a;
+        }
+
+        /* Messages Feed */
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .message-group {
+            display: flex;
+            gap: 16px;
+            padding: 6px 12px;
+            border-radius: 6px;
+            transition: background 0.4s ease-in-out;
+            animation: fadeIn 0.25s ease-in-out;
+        }
+
+        .message-group.highlight-source {
+            background-color: rgba(88, 101, 242, 0.25);
+            border-left: 4px solid var(--bg-accent);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #4752c4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            flex-shrink: 0;
+            font-size: 14px;
+        }
+
+        .avatar.instructor { background: var(--role-instructor); color: #000; }
+        .avatar.coach { background: var(--role-coach); color: #000; }
+        .avatar.ai-bot { background: linear-gradient(135deg, #5865f2, #eb459e); }
+
+        .message-content {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            max-width: 850px;
+            width: 100%;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: var(--text-heading);
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .user-name.instructor-name { color: var(--role-instructor); }
+        .user-name.coach-name { color: var(--role-coach); }
+
+        .bot-badge {
+            background: var(--bg-accent);
+            color: white;
+            font-size: 10px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .timestamp {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-weight: 400;
+            margin-left: 4px;
+        }
+
+        .edited-tag {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-left: 4px;
+        }
+
+        .message-text {
+            color: var(--text-normal);
+            line-height: 1.5;
+            font-size: 14px;
+        }
+
+        /* Embed Card Styling */
+        .embed-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-left: 4px solid var(--bg-accent);
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 6px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .embed-title {
+            color: var(--text-heading);
+            font-weight: 700;
+            font-size: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .schedule-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .schedule-item {
+            background: #1e1f22;
+            padding: 12px 14px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .badge {
+            font-size: 11px;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-mandatory { background: rgba(237, 66, 69, 0.2); color: var(--tag-mandatory); }
+        .badge-optional { background: rgba(87, 242, 135, 0.2); color: var(--tag-optional); }
+        .badge-deadline { background: rgba(254, 231, 92, 0.2); color: var(--tag-deadline); }
+
+        .source-link {
+            font-size: 12px;
+            color: #00a8fc;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 4px;
+            cursor: pointer;
+            transition: color 0.15s;
+            background: rgba(0, 168, 252, 0.1);
+            padding: 4px 8px;
+            border-radius: 4px;
+            width: fit-content;
+        }
+
+        .source-link:hover {
+            text-decoration: underline;
+            color: white;
+            background: var(--bg-accent);
+        }
+
+        /* Quick Action Demo Suggestions */
+        .demo-prompt-bar {
+            padding: 10px 20px 0 20px;
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            background: var(--bg-primary);
+        }
+
+        .prompt-chip {
+            background: rgba(88, 101, 242, 0.12);
+            border: 1px solid rgba(88, 101, 242, 0.25);
+            color: #b5bac1;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .prompt-chip:hover {
+            background: rgba(88, 101, 242, 0.3);
+            color: white;
+            border-color: var(--bg-accent);
+            transform: translateY(-1px);
+        }
+
+        /* Input Area & Locked State Notification */
+        .chat-input-box {
+            padding: 12px 20px 20px 20px;
+            background: var(--bg-primary);
+        }
+
+        .input-wrapper {
+            background: #383a40;
+            border-radius: 8px;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .input-wrapper input {
+            background: transparent;
+            border: none;
+            outline: none;
+            color: var(--text-heading);
+            font-size: 14px;
+            flex: 1;
+        }
+
+        .btn-send {
+            background: var(--bg-accent);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .btn-send:hover { background: var(--bg-accent-hover); }
+
+        .locked-channel-banner {
+            background: var(--disabled-input-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            color: var(--text-muted);
+            font-size: 13px;
+            font-weight: 500;
+            user-select: none;
+        }
+
+        .lock-icon {
+            width: 16px;
+            height: 16px;
+            fill: var(--text-muted);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Server Icon Bar -->
+    <div class="server-strip">
+        <div class="discord-home-btn" title="Discord Direct Messages">
+            <svg class="discord-logo-svg" viewBox="0 0 127.14 96.36">
+                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22c2.65-27.15-4.8-50.93-18.9-72.15ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.92,53.88,53,48.81,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.92,96.12,53,91.07,65.69,84.69,65.69Z" />
+            </svg>
+        </div>
+        <div class="server-separator"></div>
+        <div class="server-badge" title="Khóa AI Thực Chiến - Batch 03">AI</div>
+    </div>
+
+    <!-- Sidebar Channels -->
+    <div class="sidebar">
+        <div class="server-header">
+            <span>AI Thực Chiến - B03</span>
+            <svg style="width:16px; height:16px; fill:var(--text-muted);" viewBox="0 0 24 24">
+                <path d="M7 10l5 5 5-5z" />
+            </svg>
+        </div>
+
+        <div class="channel-category">
+            <span>📢 Kênh Thông Báo Giảng Viên</span>
+        </div>
+        <div class="channel-list">
+            <div class="channel-item" onclick="switchChannel('thong-bao-chung')">
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
+                # thong-bao-chung
+            </div>
+            <div class="channel-item" onclick="switchChannel('lich-hoc-moi')">
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                </svg>
+                # lich-hoc-moi
+            </div>
+        </div>
+
+        <div class="channel-category">
+            <span>🤖 Trợ Lý AI Học Viên</span>
+        </div>
+        <div class="channel-list">
+            <div class="channel-item active" onclick="switchChannel('tro-ly-lich-trinh')">
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z" />
+                </svg>
+                # tro-ly-lich-trinh
+            </div>
+        </div>
+
+        <div class="user-strip">
+            <div class="user-left-info">
+                <div class="user-avatar-container">
+                    <div class="user-avatar-mini">HV</div>
+                    <div class="status-dot"></div>
+                </div>
+                <div class="user-meta">
+                    <span class="user-meta-name">Học Viên A</span>
+                    <span class="user-meta-role">#Online</span>
+                </div>
+            </div>
+            <div class="user-controls">
+                <div class="ctrl-btn" title="Mute Mic">🎤</div>
+                <div class="ctrl-btn" title="Deafen Audio">🎧</div>
+                <div class="ctrl-btn" title="User Settings">⚙️</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Chat Window -->
+    <div class="main-chat">
+
+        <div class="chat-header">
+            <h3 id="channelHeaderTitle">
+                <svg style="width:20px; height:20px; fill:var(--text-muted);" viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                </svg>
+                # tro-ly-lich-trinh
+            </h3>
+            <span class="topic" id="channelHeaderTopic">Kênh tương tác hỏi đáp & tự động lập thời khóa biểu tối ưu từ DB Discord</span>
+        </div>
+
+        <!-- Instructor Simulation Control Bar -->
+        <div class="admin-action-bar" id="adminActionBar" style="display: none;">
+            <div class="admin-title">
+                ⚡ <span>Nút Giả Lập Giảng Viên Đăng / Chỉnh Sửa Thông Báo Mới:</span>
+            </div>
+            <div class="admin-btn-group">
+                <button class="btn-demo-admin" id="btnPostNewSpec" onclick="triggerInstructorPostNewSpec()">
+                    ➕ Giảng viên đăng: "Gia hạn Spec.md sang 12:00 N2 (#msg_9999)"
+                </button>
+                <button class="btn-demo-admin" id="btnEditMentoring" onclick="triggerInstructorEditMentoring()">
+                    ✏️ Coach Hùng sửa bài: "Mentoring CP2 dời sang 19:30 (#msg_9821)"
+                </button>
+            </div>
+        </div>
+
+        <div class="messages-container" id="chatLogs">
+            <!-- Content rendered dynamically -->
+        </div>
+
+        <!-- High-Intelligence AI Planning & Natural Prompt Chips -->
+        <div class="demo-prompt-bar" id="demoPromptBar">
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(1)">
+                🧠 <span>1. Plan Tháng (Multi-Constraint): "Bận thi 10-14/8 & công tác 22-25/8, lập plan nộp Capstone không bị quá tải"</span>
+            </div>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(2)">
+                ⚖️ <span>2. Xung đột 3 Lịch (Trade-off): "Tối T5 bị trùng 3 việc (Mentoring, Họp Capstone & Spec Deadline), AI giải quyết sao?"</span>
+            </div>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(3)">
+                💬 <span>3. Thích ứng Deadline (Post Mới): "Tối nay nhóm bận làm slide đến 22:00, có kịp làm Spec.md nộp trước hạn không?"</span>
+            </div>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(4)">
+                🔄 <span>4. Tự điều chỉnh sau khi Sửa/Hủy: "Chiều nay Coach dời lịch & T7 bị hủy, AI xếp lại thời khóa biểu tuần bù vào đâu?"</span>
+            </div>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(5)">
+                💬 <span>5. Soạn Đàm phán Lịch bù: "Bị trùng lịch thi trường với Mentoring CP2, AI soạn tin nhắn mẫu cho Coach & tìm slot bù"</span>
+            </div>
+        </div>
+
+        <div class="chat-input-box" id="inputContainer">
+            <!-- Rendered dynamically -->
+        </div>
+
+    </div>
+
+    <script>
+        let currentChannel = 'tro-ly-lich-trinh';
+
+        let stateHasNewSpecExtension = false;
+        let stateHasEditedMentoringTime = false;
+
+        // Rich Multi-Message Data Pack for Announcement Feed (20+ Messages)
+        const channelsData = {
+            'thong-bao-chung': {
+                title: '# thong-bao-chung',
+                topic: 'Thông báo chính thức từ BTC và Giảng viên (Chỉ đọc)',
+                isReadOnly: true,
+                messages: [
+                    {
+                        msgId: 'msg_9801',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: '28/07 lúc 08:00',
+                        text: '🚀 **KHAI MẠC HACKATHON BATCH 03**: Phát đề bài và phát động CP1 Chốt Canvas (09:00 - 11:30 ngày 1). Mọi người tập trung tại Main Stage!'
+                    },
+                    {
+                        msgId: 'msg_9844',
+                        sender: 'Giảng viên Tín',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'GV',
+                        time: 'Hôm qua lúc 09:00',
+                        text: 'Chào cả lớp! Buổi học Live chiều Thứ 4 tuần này (14:00 - 16:30) chúng ta sẽ học về **ReAct Engine & Function Calling**. Yêu cầu các nhóm đọc trước slide trong folder reference.'
+                    },
+                    {
+                        msgId: 'msg_9890',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: 'Hôm nay lúc 11:00',
+                        text: '🚨 **LƯU Ý HẠN NỘP BÀI CP4**: Hạn cứng nộp file `spec.md` là đúng **23:59 ngày 1 (Hôm nay)**. Sau thời gian này hệ thống tự động khóa nhận bài!'
+                    },
+                    {
+                        msgId: 'msg_10010',
+                        sender: 'Giảng viên Tín',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'GV',
+                        time: '28/07 lúc 14:00',
+                        text: '📌 **LỊCH WEEK 2**: Thứ 2 tới (03/08 09:00 - 11:30) khởi động Module 4 - **Agentic RAG & GraphRAG**. Hạn nộp Bài Lab 4 vào 23:59 Thứ 6 (07/08). Khối lượng ước tính: 8 tiếng.'
+                    },
+                    {
+                        msgId: 'msg_10100',
+                        sender: 'Hội Đồng Chấm Capstone',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'HĐ',
+                        time: '25/07 lúc 10:00',
+                        text: '🏆 **BẢN ĐỒ THÁNG 8**: Hạn chốt nộp Đề xuất Đồ án Tốt nghiệp Capstone là **23:59 ngày 15/08**. Khối lượng thực hiện ước tính: 15-20 tiếng.'
+                    },
+                    {
+                        msgId: 'msg_10200',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: '20/07 lúc 15:00',
+                        text: '🎉 **LỄ BẾ MẠC & DEMO DAY CAPSTONE**: Diễn ra vào **18:00 - 21:00 ngày 28/08** tại Discord Stage & Offline.'
+                    }
+                ]
+            },
+            'lich-hoc-moi': {
+                title: '# lich-hoc-moi',
+                topic: 'Cập nhật lịch thay đổi, lịch bổ sung & lịch mentoring',
+                isReadOnly: true,
+                messages: [
+                    {
+                        msgId: 'msg_9821',
+                        sender: 'Coach Hùng',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'CH',
+                        time: 'Hôm nay lúc 09:30',
+                        isEdited: false,
+                        text: '📢 **THAY ĐỔI LỊCH MENTORING**: Buổi Mentoring Chấm CP2 chiều nay diễn ra lúc **17:00 - 18:00** tại **Discord Voice 1**. Các nhóm lưu ý vào đúng giờ!'
+                    },
+                    {
+                        msgId: 'msg_9905',
+                        sender: 'Coach Quân',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'CQ',
+                        time: 'Hôm nay lúc 13:00',
+                        text: '📌 **LỊCH CP5**: Chiều Thứ 5 (14:00 - 16:00) tiến hành Dry Run & Kiểm tra 4 lớp chỗ khó với từng nhóm tại Voice 2.'
+                    },
+                    {
+                        msgId: 'msg_9950',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: 'Hôm nay lúc 14:15',
+                        text: '❌ **THÔNG BÁO HỦY LỊCH**: Do server Discord bảo trì định kỳ, buổi Workshop tự chọn *"Kỹ năng Prompting Nâng Cao"* sáng Thứ 7 (09:30 - 11:30) **ĐÃ BỊ HỦY**.'
+                    },
+                    {
+                        msgId: 'msg_10025',
+                        sender: 'Coach Hùng',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'CH',
+                        time: '29/07 lúc 16:00',
+                        text: '💬 **LỊCH TUẦN 2**: Mở thêm slot 1-on-1 Code Review & Fix bug với Coach vào **15:00 - 16:30 Thứ 4 (05/08)** tại Discord Voice 3.'
+                    },
+                    {
+                        msgId: 'msg_10150',
+                        sender: 'Mentor Doanh Nghiệp',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'MT',
+                        time: '26/07 lúc 11:00',
+                        text: '🌟 **WORKSHOP THÁNG 8**: Session Định hướng Sự nghiệp & Review CV 1-1 với Mentor diễn ra vào **19:30 - 21:30 ngày 20/08** trên Discord Stage.'
+                    }
+                ]
+            },
+            'tro-ly-lich-trinh': {
+                title: '# tro-ly-lich-trinh',
+                topic: 'Kênh tương tác hỏi đáp & tự động lập thời khóa biểu tối ưu từ DB Discord',
+                isReadOnly: false,
+                messages: [
+                    {
+                        msgId: 'msg_bot_init',
+                        sender: 'Schedule AI Assistant',
+                        isBot: true,
+                        time: 'Hôm nay lúc 15:00',
+                        text: 'Xin chào! Tôi là **Trợ lý AI Quản Lý & Lập Kế Hoạch Lịch Trình (ReAct Reasoning Engine)**.\n\nTôi giúp học viên **lập thời khóa biểu**, **tự điều chỉnh khi giảng viên sửa/đăng thông báo mới**, và **tính toán rủi ro tiến độ**!\n\nHãy bấm thử các câu hỏi kịch bản học viên bên dưới:'
+                    }
+                ]
+            }
+        };
+
+        // Trigger Instructor Posting New Announcement
+        function triggerInstructorPostNewSpec() {
+            if (stateHasNewSpecExtension) return;
+            stateHasNewSpecExtension = true;
+
+            const btn = document.getElementById('btnPostNewSpec');
+            if (btn) {
+                btn.classList.add('active-posted');
+                btn.innerHTML = '✓ BTC đã gia hạn Spec (#msg_9999)!';
+            }
+
+            channelsData['thong-bao-chung'].messages.push({
+                msgId: 'msg_9999',
+                sender: 'BTC Hackathon',
+                roleClass: 'instructor-name',
+                avatarClass: 'instructor',
+                avatarText: 'BTC',
+                time: 'Vừa xong (16:20)',
+                text: '📢 **CẬP NHẬT GIA HẠN SPEC**: BTC quyết định GIA HẠN nộp file `spec.md` từ 23:59 hôm nay sang **12:00 Ngày 2**!'
+            });
+
+            if (currentChannel === 'thong-bao-chung') {
+                renderChannel('thong-bao-chung', 'msg_9999');
+            } else {
+                alert('🔔 BTC vừa đăng thông báo gia hạn mới (#msg_9999) trong #thong-bao-chung!\n\nHãy quay lại kênh #tro-ly-lich-trinh bấm nút Nút 3 để xem AI điều chỉnh thời khóa biểu!');
+            }
+        }
+
+        // Trigger Instructor Editing Message
+        function triggerInstructorEditMentoring() {
+            if (stateHasEditedMentoringTime) return;
+            stateHasEditedMentoringTime = true;
+
+            const btn = document.getElementById('btnEditMentoring');
+            if (btn) {
+                btn.classList.add('active-posted');
+                btn.innerHTML = '✓ Coach Hùng đã sửa bài #msg_9821!';
+            }
+
+            const msg = channelsData['lich-hoc-moi'].messages.find(m => m.msgId === 'msg_9821');
+            if (msg) {
+                msg.isEdited = true;
+                msg.time = 'Hôm nay lúc 09:30 (Sửa lúc 16:22)';
+                msg.text = '📢 **THAY ĐỔI LỊCH MENTORING (CẬP NHẬT)**: Buổi Mentoring Chấm CP2 chiều nay dời lại tối sang slot **19:30 - 20:30** tại **Discord Voice 1**. Các nhóm lưu ý mốc giờ mới!';
+            }
+
+            if (currentChannel === 'lich-hoc-moi') {
+                renderChannel('lich-hoc-moi', 'msg_9821');
+            } else {
+                alert('✏️ Coach Hùng vừa sửa tin nhắn #msg_9821 dời giờ Mentoring sang 19:30 trong #lich-hoc-moi!\n\nHãy quay lại kênh #tro-ly-lich-trinh bấm Nút 4 để thấy AI cập nhật!');
+            }
+        }
+
+        // Render current channel view
+        function renderChannel(channelKey, targetMsgId = null) {
+            currentChannel = channelKey;
+            const data = channelsData[channelKey];
+
+            document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
+            const activeEl = Array.from(document.querySelectorAll('.channel-item')).find(el => el.textContent.includes(channelKey));
+            if (activeEl) activeEl.classList.add('active');
+
+            document.getElementById('channelHeaderTitle').innerHTML = `
+                <svg style="width:20px; height:20px; fill:var(--text-muted);" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                ${data.title}
+            `;
+            document.getElementById('channelHeaderTopic').textContent = data.topic;
+
+            const chatLogs = document.getElementById('chatLogs');
+            chatLogs.innerHTML = '';
+
+            data.messages.forEach(msg => {
+                const group = document.createElement('div');
+                group.className = 'message-group';
+                if (msg.msgId) group.id = msg.msgId;
+
+                let avatarHTML = '';
+                if (msg.isBot) {
+                    avatarHTML = `<div class="avatar ai-bot">AI</div>`;
+                } else {
+                    avatarHTML = `<div class="avatar ${msg.avatarClass || ''}">${msg.avatarText || 'HV'}</div>`;
+                }
+
+                let nameHTML = '';
+                if (msg.isBot) {
+                    nameHTML = `<div class="user-name">Schedule AI Assistant <span class="bot-badge">✓ BOT</span> <span class="timestamp">${msg.time}</span></div>`;
+                } else {
+                    let editedLabel = msg.isEdited ? `<span class="edited-tag">(đã chỉnh sửa)</span>` : '';
+                    nameHTML = `<div class="user-name ${msg.roleClass || ''}">${msg.sender} <span class="timestamp">${msg.time}</span> ${editedLabel}</div>`;
+                }
+
+                let contentHTML = `<div class="message-text">${msg.text.replace(/\n/g, '<br/>')}</div>`;
+                if (msg.embed) {
+                    contentHTML += msg.embed;
+                }
+
+                group.innerHTML = `
+                    ${avatarHTML}
+                    <div class="message-content">
+                        ${nameHTML}
+                        ${contentHTML}
+                    </div>
+                `;
+                chatLogs.appendChild(group);
+            });
+
+            const adminBar = document.getElementById('adminActionBar');
+            const promptBar = document.getElementById('demoPromptBar');
+            const inputContainer = document.getElementById('inputContainer');
+
+            if (data.isReadOnly) {
+                adminBar.style.display = 'flex';
+                promptBar.style.display = 'none';
+                inputContainer.innerHTML = `
+                    <div class="locked-channel-banner">
+                        <svg class="lock-icon" viewBox="0 0 24 24"><path d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z"/></svg>
+                        <span>Bạn không có quyền gửi tin nhắn trong kênh này (Chỉ dành cho Ban Tổ Chức & Giảng Viên đăng thông báo).</span>
+                    </div>
+                `;
+            } else {
+                adminBar.style.display = 'none';
+                promptBar.style.display = 'flex';
+                inputContainer.innerHTML = `
+                    <div class="input-wrapper">
+                        <input type="text" placeholder="Hỏi AI về lịch học hoặc nhờ AI lập kế hoạch cá nhân hóa..." id="userInput" onkeydown="if(event.key==='Enter') handleUserSubmit()">
+                        <button class="btn-send" onclick="handleUserSubmit()">Gửi Yêu Cầu</button>
+                    </div>
+                `;
+            }
+
+            if (targetMsgId) {
+                setTimeout(() => {
+                    const targetEl = document.getElementById(targetMsgId);
+                    if (targetEl) {
+                        targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        targetEl.classList.add('highlight-source');
+                        setTimeout(() => {
+                            targetEl.classList.remove('highlight-source');
+                        }, 2500);
+                    }
+                }, 100);
+            } else {
+                chatLogs.scrollTop = chatLogs.scrollHeight;
+            }
+        }
+
+        function jumpToMessage(channelKey, msgId) {
+            renderChannel(channelKey, msgId);
+        }
+
+        function switchChannel(key) {
+            renderChannel(key);
+        }
+
+        // Advanced AI Planning & Natural Student Prompt Handlers
+        function executeIntelligencePrompt(promptIndex) {
+            if (currentChannel !== 'tro-ly-lich-trinh') {
+                renderChannel('tro-ly-lich-trinh');
+            }
+
+            if (promptIndex === 1) {
+                // MULTI-CONSTRAINT MONTHLY STRATEGIC PLAN
+                appendUserMsg("Tháng 8 này tôi bận thi học kỳ ở trường từ 10/08 - 14/08 và phải đi công tác 22/08 - 25/08. Hãy lập cho tôi kế hoạch chia nhỏ thời gian ôn tập và nộp Capstone không bị quá tải.");
+                setTimeout(() => {
+                    appendAIMsg(
+                        "🧠 **AI REASONING & STRATEGIC PLANNING RESPONSE**:\n\nTôi đã đối soát 2 khoảng bận của bạn (**Thi trường 10-14/08** & **Công tác 22-25/08**) với Deadline Capstone (**15/08** - ước tính khối lượng 20 tiếng). Để **tránh quá tải rủi ro vỡ nợ trước tuần thi**, AI đề xuất kế hoạch phân bổ Sprint học tập tối ưu như sau:",
+                        `
+                        <div class="embed-card" style="border-left-color: #57f287;">
+                            <div class="embed-title" style="color: #57f287;">🚀 LỘ TRÌNH LẬP KẾ HOẠCH HỌC TẬP THÁNG 8 (ĐÃ NÉ 2 KHOẢNG BẬN)</div>
+                            <div class="schedule-grid">
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Phase 1 (01/08 - 09/08): SPRINT ĐẦU TƯ TẬP TRUNG (Hoàn thành 70% Capstone)</h4>
+                                        <p>Chiến lược: Dồn làm Capstone 2.5h/ngày trước khi bước vào tuần thi trường (Tổng 15h)</p>
+                                    </div>
+                                    <span class="badge badge-optional">PHASE CHỦ ĐẠO</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Phase 2 (10/08 - 14/08): TẠM HOÃN HỌC AI -> TẬP TRUNG THI HỌC KỲ</h4>
+                                        <p>Chiến lược: Giảm tải AI xuống 0.5h/ngày rảnh nhẹ. Né 100% rủi ro quá tải thi cử.</p>
+                                    </div>
+                                    <span class="badge badge-mandatory">NÉ LỊCH BẬN THI</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Phase 3 (15/08 19:00 - 23:59): CHỐT & NỘP BÀI CAPSTONE</h4>
+                                        <p>Nộp bài hoàn thiện trước 23:59 theo thông báo #msg_10100</p>
+                                        <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_10100')">🔗 Jump to thông báo #msg_10100</span>
+                                    </div>
+                                    <span class="badge badge-deadline">DEADLINE</span>
+                                </div>
+                            </div>
+                        </div>
+                        `
+                    );
+                }, 700);
+            } else if (promptIndex === 2) {
+                // 3-WAY CONFLICT TRADE-OFF SOLVER WITH DYNAMIC SPEC EXTENSION CHECK
+                appendUserMsg("Tối Thứ 5 tuần này (19:30 - 21:30) tôi vừa có lịch Mentoring CP2 dời lại, vừa có hẹn họp nhóm Capstone và lại sát Hạn nộp Spec.md. AI hãy giải quyết xung đột 3 việc này giúp tôi.");
+                setTimeout(() => {
+                    let mentoringStatus = stateHasEditedMentoringTime ? "Lịch Mentoring CP2 của Coach Hùng đã dời sang 19:30 (#msg_9821)" : "Lịch Mentoring hiện tại 17:00 (#msg_9821)";
+                    let specNotice = stateHasNewSpecExtension 
+                        ? "🎉 **TIN MỚI**: BTC vừa gia hạn nộp Spec.md sang **12:00 Ngày 2 (#msg_9999)** nên áp lực tối T5 đã giảm!" 
+                        : "⏰ Hạn nộp Spec.md chốt 23:59 hôm nay (#msg_9890).";
+                    let specSlotText = stateHasNewSpecExtension
+                        ? "Dời slot làm Spec sang Sáng Ngày 2 (do BTC đã gia hạn #msg_9999)"
+                        : "Tập trung nộp Spec.md từ 17:00 - 19:00 (trước hạn 23:59 #msg_9890)";
+                    
+                    appendAIMsg(
+                        `⚖️ **AI TRADE-OFF & CONFLICT SOLVER**:\n\nPhát hiện xung đột các công việc Tối T5. ${mentoringStatus}.\n${specNotice}\n\nAI đề xuất giải pháp điều phối thời gian:`,
+                        `
+                        <div class="embed-card" style="border-left-color: ${stateHasNewSpecExtension ? '#57f287' : '#fee75c'};">
+                            <div class="embed-title" style="color: ${stateHasNewSpecExtension ? '#57f287' : '#fee75c'};">🔀 PHƯƠNG ÁN ĐỀ XUẤT ĐÁNH ĐỔI (TRADE-OFF RESOLUTION)</div>
+                            <div class="schedule-grid">
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Spec.md: ${specSlotText}</h4>
+                                        <span class="source-link" onclick="jumpToMessage('thong-bao-chung', stateHasNewSpecExtension ? 'msg_9999' : 'msg_9890')">🔗 Source #${stateHasNewSpecExtension ? 'msg_9999' : 'msg_9890'}</span>
+                                    </div>
+                                    <span class="badge badge-deadline">SPEC DEADLINE</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Mentoring CP2: Tham gia Voice 1 (${stateHasEditedMentoringTime ? '19:30 - 20:30' : '17:00 - 18:00'})</h4>
+                                        <p>Sự kiện bắt buộc chấm điểm với Coach Hùng</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Source #msg_9821</span>
+                                    </div>
+                                    <span class="badge badge-mandatory">BẮT BUỘC</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Họp Nhóm Capstone: Dời sang 20:00 - 21:30 Tối T6</h4>
+                                        <p>Tối T6 tất cả thành viên trong nhóm bạn đều rảnh.</p>
+                                    </div>
+                                    <span class="badge badge-optional">ĐỀ XUẤT DỜI HỌP</span>
+                                </div>
+                            </div>
+                        </div>
+                        `
+                    );
+                }, 700);
+            } else if (promptIndex === 3) {
+                // NATURAL STUDENT QUERY FOR DEADLINE PLANNING & SPEC EXTENSION
+                appendUserMsg("Tối nay nhóm bận làm slide đến 22:00, có kịp làm Spec.md nộp trước hạn không AI?");
+                setTimeout(() => {
+                    if (stateHasNewSpecExtension) {
+                        appendAIMsg(
+                            "📢 **KỊP HOÀN TOÀN! (CẬP NHẬT THÔNG BÁO MỚI #msg_9999)**:\n\nBTC vừa đăng thông báo gia hạn mới trong `#thong-bao-chung` (#msg_9999)! Hạn nộp `spec.md` đã được dời từ 23:59 hôm nay sang **12:00 Trưa Ngày 2**.\n\n👉 **Gợi ý AI**: Nhóm bạn cứ yên tâm làm slide tối nay đến 22:00, sau đó dành Sáng mai (08:30 - 11:30) để chốt nộp Spec!",
+                            `
+                            <div class="embed-card" style="border-left-color: #57f287;">
+                                <div class="embed-title" style="color: #57f287;">🎉 CHÍNH THỨC GIA HẠN SPEC.MD SANG 12:00 TRƯA NGÀY 2</div>
+                                <p style="font-size: 14px; color: var(--text-normal);">
+                                    Thông báo mới nhất (#msg_9999): BTC quyết định GIA HẠN nộp file Spec.md sang <strong>12:00 Ngày 2</strong>.
+                                </p>
+                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9999')">🔗 Click để Jump to thông báo vừa đăng (#msg_9999)</span>
+                            </div>
+                            `
+                        );
+                    } else {
+                        appendAIMsg(
+                            "⚠️ **CẢNH BÁO NGUY CƠ TRỄ DEADLINE (70%)**:\n\nTheo thông báo hiện tại `#msg_9890` trong `#thong-bao-chung`, hạn nộp cứng Spec.md là **23:59 Hôm nay**.\n\nNếu nhóm làm slide tới 22:00 thì chỉ còn đúng **1 tiếng 59 phút** để chốt Spec, rủi ro không kịp nộp bài rất cao!\n\n👉 **Gợi ý AI**: Nhóm nên ưu tiên hoàn thành Spec.md trước 21:00 để nộp đúng hạn, sau đó mới làm slide.\n\n💡 *Tip Demo*: Nếu BTC đăng bài gia hạn mới, AI sẽ tự điều chỉnh lời khuyên này!",
+                            `
+                            <div class="embed-card" style="border-left-color: #fee75c;">
+                                <div class="embed-title" style="color: #fee75c;">⏰ HẠN CỨNG HIỆN TẠI: 23:59 HÔM NAY</div>
+                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9890')">🔗 Jump to thông báo gốc hiện tại (#msg_9890)</span>
+                            </div>
+                            `
+                        );
+                    }
+                }, 700);
+            } else if (promptIndex === 4) {
+                // RE-OPTIMIZATION AFTER EDITS/CANCELLATIONS
+                appendUserMsg("Chiều nay Coach dời lịch & T7 bị hủy, AI hãy tính toán lại toàn bộ kế hoạch tuần này và cập nhật mốc làm bài tập bù vào đâu?");
+                setTimeout(() => {
+                    let editNotice = stateHasEditedMentoringTime 
+                        ? "Coach Hùng vừa dời Mentoring CP2 sang 19:30 (#msg_9821)" 
+                        : "Coach Hùng dời giờ Mentoring CP2 (#msg_9821)";
+                    appendAIMsg(
+                        `🔄 **AI RE-SCHEDULING AFTER DYNAMIC DISCORD EDITS**:\n\nSau khi quét lại dữ liệu thông báo Discord mới nhất (${editNotice} và Workshop T7 bị hủy theo #msg_9950), AI tái cấu trúc lại tuần học của bạn:`,
+                        `
+                        <div class="embed-card">
+                            <div class="embed-title">🗓️ THỜI KHÓA BIỂU ĐÃ CẤU TRÚC LẠI TUẦN NÀY</div>
+                            <div class="schedule-grid">
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Chiều nay (RẢNH 17:00 - 18:00): Chuyển sang đọc trước Slide ReAct</h4>
+                                        <p>Do Mentoring đã dời sang 19:30 (#msg_9821), slot 17h rảnh 1 tiếng</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Jump to tin nhắn Mentoring #msg_9821</span>
+                                    </div>
+                                    <span class="badge badge-optional">SLOT RẢNH TẠO MỚI</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Sáng T7 (09:30 - 11:30): TẬN DỤNG SLOT HỦY WORKSHOP LÀM BÀI LAB</h4>
+                                        <p>Do Workshop T7 bị hủy (#msg_9950), tận dụng 2 tiếng rảnh này làm bài tập bù</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9950')">🔗 Source tin hủy Workshop #msg_9950</span>
+                                    </div>
+                                    <span class="badge badge-optional">SLOT BÙ TỐI ƯU</span>
+                                </div>
+                            </div>
+                        </div>
+                        `
+                    );
+                }, 700);
+            } else if (promptIndex === 5) {
+                // NEGOTIATION TEMPLATE & ALTERNATIVE SLOT FINDER
+                appendUserMsg("Bị trùng lịch thi trường với Mentoring CP2, AI soạn tin nhắn mẫu cho Coach & tìm slot bù giúp tôi");
+                setTimeout(() => {
+                    appendAIMsg(
+                        "💬 **SOẠN TIN NHẮN ĐÀM PHÁN LỊCH BÙ (AI RESCHEDULING ASSISTANT)**:\n\nAI đã kiểm tra DB: Coach Hùng còn mở **1 slot Mentoring bổ sung vào 15:00 - 16:30 Thứ 4 tuần sau (05/08)** tại Voice 3 (#msg_10025).\n\nDưới đây là mẫu tin nhắn chỉn chu bạn có thể copy gửi Coach Hùng:",
+                        `
+                        <div class="embed-card" style="border-left-color: #5865f2;">
+                            <div class="embed-title">✉️ MẪU TIN NHẮN GỬI COACH HÙNG (COPY & PASTE)</div>
+                            <p style="font-size: 13px; color: var(--text-heading); font-style: italic; background: #1e1f22; padding: 10px; border-radius: 4px;">
+                                "Em chào Coach Hùng ạ! Do buổi Mentoring CP2 trùng đúng ca thi học kỳ của em ở trường, em xin phép Coach cho em đăng ký chuyển sang slot Mentoring bù vào Thứ 4 tuần sau (05/08 15:00) tại Voice 3 theo thông báo #msg_10025 được không ạ? Em cảm ơn Coach!"
+                            </p>
+                            <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_10025')">🔗 Trích dẫn slot bù #msg_10025</span>
+                        </div>
+                        `
+                    );
+                }, 700);
+            }
+        }
+
+        function appendUserMsg(text) {
+            const chatLogs = document.getElementById('chatLogs');
+            const group = document.createElement('div');
+            group.className = 'message-group';
+            group.innerHTML = `
+                <div class="avatar">HV</div>
+                <div class="message-content">
+                    <div class="user-name">Học Viên A <span class="timestamp">Vừa xong</span></div>
+                    <div class="message-text">${text}</div>
+                </div>
+            `;
+            chatLogs.appendChild(group);
+            chatLogs.scrollTop = chatLogs.scrollHeight;
+        }
+
+        function appendAIMsg(text, embedHTML = '') {
+            const chatLogs = document.getElementById('chatLogs');
+            const group = document.createElement('div');
+            group.className = 'message-group';
+            group.innerHTML = `
+                <div class="avatar ai-bot">AI</div>
+                <div class="message-content">
+                    <div class="user-name">Schedule AI Assistant <span class="bot-badge">✓ BOT</span> <span class="timestamp">Vừa xong</span></div>
+                    <div class="message-text">${text}</div>
+                    ${embedHTML}
+                </div>
+            `;
+            chatLogs.appendChild(group);
+            chatLogs.scrollTop = chatLogs.scrollHeight;
+        }
+
+        function handleUserSubmit() {
+            const input = document.getElementById('userInput');
+            if (!input || !input.value.trim()) return;
+
+            const text = input.value.trim();
+            input.value = '';
+            appendUserMsg(text);
+
+            setTimeout(() => {
+                let specResponse = stateHasNewSpecExtension
+                    ? "📢 BTC vừa đăng gia hạn Spec.md sang 12:00 Ngày 2 (#msg_9999)!"
+                    : "Hạn Spec.md hiện tại chốt 23:59 Hôm nay (#msg_9890).";
+                appendAIMsg(`Đã truy xuất DB thông báo Discord cho câu hỏi <i>"${text}"</i>:\n\n${specResponse}`);
+            }, 600);
+        }
+
+        // Initialize default view
+        renderChannel('tro-ly-lich-trinh');
+    </script>
+</body>
+</html>

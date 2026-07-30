@@ -1,0 +1,16 @@
+[
+  {
+    "id": "TC_001",
+    "query": "Tuần này tôi có những lịch học bắt buộc nào?",
+    "expected_intent": "QUERY_MANDATORY_SCHEDULES",
+    "expected_contains": ["SCH_001", "SCH_002", "SCH_003"],
+    "requires_citation": true
+  },
+  {
+    "id": "TC_002",
+    "query": "Xếp cho tôi lịch làm bài tập tuần này, tránh Sáng Thứ 4 bận 09:00-11:30",
+    "expected_intent": "OPTIMIZE_TIMETABLE",
+    "user_constraints": ["2026-07-31T09:00:00-11:30:00"],
+    "requires_citation": true
+  }
+]

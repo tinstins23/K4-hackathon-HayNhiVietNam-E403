@@ -17,7 +17,7 @@ import json
 from datetime import datetime, timezone
 
 from db import (
-    upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS,
+    upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS, is_official_source,
     list_active_schedules_for_matching, create_schedule, update_schedule, cancel_schedule,
 )
 from openrouter_client import chat_completion, parse_json_content
@@ -68,7 +68,13 @@ Quy tắc:
 
 
 def _should_ingest(sender_role: str, channel: str) -> bool:
-    return channel in OFFICIAL_CHANNELS and ROLE_PRIORITY.get(sender_role, 0) >= ROLE_PRIORITY["mentor"]
+    """Có gọi Extraction Agent (LLM) để trích thành lịch chính thức không.
+
+    Dùng chung định nghĩa với field `is_official` của bảng messages — xem
+    `db.is_official_source()`. Tin nhắn KHÔNG đạt vẫn được lưu raw ở `upsert_message`
+    bên dưới, chỉ là không được biến thành lịch chính thức.
+    """
+    return is_official_source(sender_role, channel)
 
 
 def ingest_message(msg_id, channel, sender, sender_role, content, created_at=None,

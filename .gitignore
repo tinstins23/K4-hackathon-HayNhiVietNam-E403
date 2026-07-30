@@ -1,3 +1,13 @@
 .DS_Store
 node_modules/
 *.env
+
+# Python
+__pycache__/
+*.py[cod]
+venv/
+
+# SQLite DB — chứa tin nhắn Discord thật của học viên, KHÔNG commit
+# (README.md gốc §"Bảo mật dữ liệu được cung cấp")
+*.db
+*.db-journal

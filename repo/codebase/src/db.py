@@ -22,7 +22,14 @@ import os
 from datetime import datetime, timezone
 from contextlib import contextmanager
 
-DB_PATH = os.getenv("DB_PATH", "schedules.db")
+# DB_PATH mặc định neo theo vị trí file db.py này, KHÔNG theo cwd — nếu để tương đối thì
+# chạy từ thư mục khác sẽ lặng lẽ tạo một DB rỗng mới và AI trả "không tìm thấy lịch" cho
+# mọi câu hỏi mà không báo lỗi gì. Muốn đổi chỗ lưu thì set biến môi trường DB_PATH.
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+_env_db_path = os.getenv("DB_PATH") or "schedules.db"
+# Đường dẫn tương đối (kể cả khi lấy từ .env) luôn được neo về thư mục src/, không theo cwd.
+# Chỉ đường dẫn tuyệt đối mới được tôn trọng nguyên vẹn.
+DB_PATH = _env_db_path if os.path.isabs(_env_db_path) else os.path.join(_SRC_DIR, _env_db_path)
 
 ROLE_PRIORITY = {
     "btc": 4,
@@ -32,7 +39,40 @@ ROLE_PRIORITY = {
     "student": 1,
 }
 
-OFFICIAL_CHANNELS = {"thong-bao-chung", "lich-hoc-moi"}
+# Kênh được coi là nguồn thông báo chính thức -> mới được trích xuất thành lịch.
+# Đặt qua biến môi trường OFFICIAL_CHANNELS (phân cách bằng dấu phẩy) để khớp tên kênh
+# THẬT trên server Discord. Nếu tên ở đây không khớp tên kênh thật thì sẽ không có lịch
+# nào được trích xuất, mà cũng KHÔNG có lỗi nào hiện ra — rất khó phát hiện.
+_DEFAULT_OFFICIAL_CHANNELS = "thong-bao-chung,lich-hoc-moi"
+OFFICIAL_CHANNELS = {
+    c.strip().lower()
+    for c in (os.getenv("OFFICIAL_CHANNELS") or _DEFAULT_OFFICIAL_CHANNELS).split(",")
+    if c.strip()
+}
+
+# Vai tối thiểu để tin nhắn được coi là nguồn chính thức.
+MIN_OFFICIAL_ROLE = "mentor"
+
+
+def is_official_source(sender_role: str, channel: str) -> bool:
+    """Tin nhắn này có đáng tin để coi là NGUỒN SỰ THẬT về lịch không?
+
+    Định nghĩa duy nhất cho cả 2 việc, để 2 chỗ không tự suy lại logic rồi lệch nhau:
+      1. `ingestion._should_ingest` — có gọi Extraction Agent ghi vào official_schedules không
+      2. field `is_official` trả kèm mỗi tin nhắn — để agent/Discord embed phân biệt
+         "trích dẫn nguồn sự thật" với "tin nhắn học viên nhắc tới, chưa xác thực"
+    """
+    return (
+        (channel or "").strip().lower() in OFFICIAL_CHANNELS
+        and ROLE_PRIORITY.get(sender_role, 0) >= ROLE_PRIORITY[MIN_OFFICIAL_ROLE]
+    )
+
+
+def _with_trust(row) -> dict:
+    """Chuyển 1 row bảng messages thành dict + gắn sẵn nhãn tin cậy."""
+    d = dict(row)
+    d["is_official"] = is_official_source(d.get("sender_role"), d.get("channel"))
+    return d
 
 
 def now_iso() -> str:
@@ -121,7 +161,7 @@ def upsert_message(msg_id, channel, sender, sender_role, content, created_at=Non
 def get_message(msg_id):
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM messages WHERE msg_id=?", (msg_id,)).fetchone()
-        return dict(row) if row else None
+        return _with_trust(row) if row else None
 
 
 def list_messages(channel: str, limit: int = 50):
@@ -130,20 +170,55 @@ def list_messages(channel: str, limit: int = 50):
             "SELECT * FROM messages WHERE channel=? ORDER BY created_at ASC LIMIT ?",
             (channel, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [_with_trust(r) for r in rows]
 
 
-def search_messages(keyword: str, channel: str = None, limit: int = 10):
-    q = "SELECT * FROM messages WHERE content LIKE ?"
-    params = [f"%{keyword}%"]
+def search_messages(keyword: str, channel: str = None, limit: int = 20,
+                     sender_role: str = None, only_official: bool = None,
+                     date_from: str = None, date_to: str = None):
+    """Tìm tin nhắn thô theo từ khoá — gồm CẢ tin nhắn học viên, không chỉ thông báo.
+
+    Mỗi kết quả có field `is_official`: True = nguồn chính thức đáng tin,
+    False = tin nhắn học viên (chỉ là ngữ cảnh, KHÔNG phải sự thật về lịch).
+
+    only_official=True  -> chỉ nguồn chính thức
+    only_official=False -> chỉ tin nhắn không chính thức (dùng để xem học viên đang bàn gì)
+    only_official=None  -> cả hai (mặc định)
+    """
+    # Tách từ khoá thành các token và khớp OR, xếp hạng theo SỐ TOKEN khớp.
+    # Nếu khớp nguyên cụm như trước (`content LIKE '%cả cụm%'`) thì model hỏi
+    # "deadline nộp đồ án Capstone" sẽ KHÔNG tìm ra câu "deadline Capstone dời sang 20/8" —
+    # tức là gần như mọi câu hỏi tự nhiên đều trả về rỗng.
+    tokens = [t for t in (keyword or "").split() if len(t) > 1] or [keyword or ""]
+    like_terms = " OR ".join(["content LIKE ?"] * len(tokens))
+    score = " + ".join(["(CASE WHEN content LIKE ? THEN 1 ELSE 0 END)"] * len(tokens))
+    patterns = [f"%{t}%" for t in tokens]
+
+    q = f"SELECT *, ({score}) AS _score FROM messages WHERE ({like_terms})"
+    params = patterns + patterns          # thứ tự: SELECT score trước, rồi WHERE
     if channel:
         q += " AND channel=?"
         params.append(channel)
-    q += " ORDER BY created_at DESC LIMIT ?"
-    params.append(limit)
+    if sender_role:
+        q += " AND sender_role=?"
+        params.append(sender_role)
+    if date_from:
+        q += " AND created_at >= ?"
+        params.append(date_from)
+    if date_to:
+        q += " AND created_at <= ?"
+        params.append(date_to)
+    q += " ORDER BY _score DESC, created_at DESC LIMIT ?"
+    # Lọc is_official bằng Python (nó là giá trị suy ra, không phải cột) -> nới limit SQL
+    # để sau khi lọc vẫn còn đủ kết quả trả về.
+    params.append(limit if only_official is None else limit * 5)
     with get_conn() as conn:
-        rows = conn.execute(q, params).fetchall()
-        return [dict(r) for r in rows]
+        rows = [_with_trust(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        r.pop("_score", None)
+    if only_official is not None:
+        rows = [r for r in rows if r["is_official"] is bool(only_official)]
+    return rows[:limit]
 
 
 def next_schedule_id():
@@ -211,7 +286,11 @@ def query_schedules(date_from=None, date_to=None, category=None, status="active"
         q += " AND status=?"
         params.append(status)
     if date_from:
-        q += " AND end_time >= ?"
+        # end_time CÓ THỂ NULL (deadline chỉ có mốc bắt đầu). Trong SQLite `NULL >= x` ra
+        # NULL -> bị coi là false -> sự kiện đó biến mất khỏi MỌI query có date_from mà
+        # không báo lỗi. Đây từng làm "Hạn nộp Đồ án Capstone" không bao giờ tra được.
+        # Không có end_time thì lấy start_time làm mốc so sánh.
+        q += " AND COALESCE(end_time, start_time) >= ?"
         params.append(date_from)
     if date_to:
         q += " AND start_time <= ?"

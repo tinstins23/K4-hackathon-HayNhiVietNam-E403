@@ -5,9 +5,15 @@ Docs: https://openrouter.ai/docs
 """
 import os
 import json
+import time
 import httpx
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# 429 = rate limit (hay gặp với model :free), 5xx = provider lỗi tạm thời
+RETRYABLE_STATUS = {429, 500, 502, 503, 504}
+MAX_RETRIES = int(os.getenv("OPENROUTER_MAX_RETRIES", "4"))
+RETRY_BACKOFF = float(os.getenv("OPENROUTER_RETRY_BACKOFF", "1.0"))
 
 
 def _api_key():
@@ -42,16 +48,34 @@ def chat_completion(messages, model, tools=None, tool_choice=None,
     if response_format:
         payload["response_format"] = response_format
 
-    with httpx.Client(timeout=timeout) as client:
-        resp = client.post(OPENROUTER_URL, headers=headers, json=payload)
-        if resp.status_code != 200:
-            raise RuntimeError(f"OpenRouter lỗi {resp.status_code}: {resp.text[:500]}")
-        data = resp.json()
+    # Các model ":free" trên OpenRouter chập chờn — đo thực tế thấy ~20% lượt gọi trả
+    # 500/429. Không retry thì demo trực tiếp rất dễ chết giữa chừng. Chỉ thử lại với
+    # lỗi TẠM THỜI; lỗi 401/400 (sai key, sai payload) thì ném ngay, retry vô ích.
+    last_err = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(OPENROUTER_URL, headers=headers, json=payload)
 
-    if "error" in data:
-        raise RuntimeError(f"OpenRouter trả lỗi: {data['error']}")
+            if resp.status_code in RETRYABLE_STATUS:
+                last_err = RuntimeError(f"OpenRouter lỗi {resp.status_code}: {resp.text[:300]}")
+            elif resp.status_code != 200:
+                raise RuntimeError(f"OpenRouter lỗi {resp.status_code}: {resp.text[:500]}")
+            else:
+                data = resp.json()
+                if "error" in data:
+                    # OpenRouter đôi khi trả HTTP 200 nhưng body chứa error (VD provider 500)
+                    last_err = RuntimeError(f"OpenRouter trả lỗi: {data['error']}")
+                else:
+                    return data["choices"][0]["message"]
 
-    return data["choices"][0]["message"]
+        except (httpx.TimeoutException, httpx.TransportError) as e:
+            last_err = RuntimeError(f"Lỗi mạng tới OpenRouter: {e}")
+
+        if attempt < MAX_RETRIES - 1:
+            time.sleep(RETRY_BACKOFF * (2 ** attempt))
+
+    raise last_err
 
 
 def parse_json_content(message):

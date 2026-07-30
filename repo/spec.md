@@ -76,7 +76,7 @@ Loại: [ ] Tối ưu tính năng có sẵn  [x] Tính năng mới
 ## §8. Phân công & kế hoạch
 - **Phân công có tên**:
   - **Thắng**: Khảo sát (Survey 20+ HV, mining pain points, thu thập evidence, làm §1-§2 Spec).
-  - **Tín + Hùng**: Tìm đề tài + Build Engine (Xây dựng Discord Bot, Ingestion Pipeline, SQLite DB, ReAct Agent Loop, architecture.md).
+  - **Tín + Hùng**: Tìm đề tài + Build Engine (Xây dựng Discord Bot, Ingestion Pipeline, SQLite DB, ReAct Agent Loop).
   - **Quân**: Prompt Engineering (Soạn System Prompt, Tool Schema Function Calling, 4 lớp chỗ khó §5, Golden Set Eval).
 - **Willing users (≥3 tên)**: Nguyễn Văn A, Trần Thị B, Lê Văn C (sẵn sàng test prototype tại CP5).
 

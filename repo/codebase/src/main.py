@@ -39,15 +39,11 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
 class IngestRequest(BaseModel):
     msg_id: str
     channel: str
     sender: str
-    sender_role: str  # btc | instructor | coach | mentor | student
+    sender_role: str
     content: str
     created_at: Optional[str] = None
     is_edited: bool = False
@@ -56,8 +52,8 @@ class IngestRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     user_label: str = "học viên"
-    history: Optional[List[dict]] = None   # [{role:"user"/"assistant", content:"..."}]
-    reference_date: Optional[str] = None    # override cho demo (vd. "2026-08-10"); mặc định = hôm nay
+    history: Optional[List[dict]] = None
+    reference_date: Optional[str] = None
 
 
 class ChatResponse(BaseModel):
@@ -65,10 +61,6 @@ class ChatResponse(BaseModel):
     citations: list
     tool_trace: list
 
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
 
 @app.get("/health")
 def health():

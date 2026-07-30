@@ -3,7 +3,7 @@ seed_data.py — Nạp lại đúng bộ tin nhắn đang hiển thị trong cod
 (biến `channelsData`) vào DB thật, đi qua Extraction Agent thật (không hardcode
 official_schedules như db.py bản cũ) -> đảm bảo demo UI và backend khớp nhau.
 
-Chạy:  cd codebase/src && python seed_data.py
+Chạy:  cd repo/codebase/src && python seed_data.py
 (cần OPENROUTER_API_KEY trong .env vì script này gọi Extraction Agent thật)
 """
 import os
@@ -15,7 +15,6 @@ import ingestion
 
 db.init_db()
 
-# role mapping theo người gửi xuất hiện trong mock_ui/index.html
 SENDER_ROLE = {
     "BTC Hackathon": "btc",
     "Giảng viên Tín": "instructor",
@@ -25,9 +24,6 @@ SENDER_ROLE = {
     "Mentor Doanh Nghiệp": "mentor",
 }
 
-# Copy nguyên văn message text từ mock_ui/index.html (channelsData), gắn thêm
-# created_at cụ thể (mock UI chỉ có label tương đối "Hôm nay", "Hôm qua"...).
-# Quy ước: "hôm nay" trong data demo = 2026-07-30 (đúng ngày Changelog trong spec.md).
 SEED_MESSAGES = [
     # --- #thong-bao-chung ---
     dict(msg_id="msg_9801", channel="thong-bao-chung", sender="BTC Hackathon",
@@ -51,14 +47,10 @@ SEED_MESSAGES = [
          content="LỄ BẾ MẠC & DEMO DAY CAPSTONE: Diễn ra vào 18:00 - 21:00 ngày 2026-08-28 tại Discord Stage & Offline."),
 
     # --- #lich-hoc-moi ---
-    # msg_9810 là thông báo gốc về Mentoring Chấm CP2 (ban đầu lúc 15:00)
-    # -> msg_9821 sẽ "update" đổi sang 17:00, đúng luồng "thay đổi lịch"
     dict(msg_id="msg_9810", channel="lich-hoc-moi", sender="Coach Hùng",
          created_at="2026-07-29T14:00:00",
          content="LỊCH MENTORING: Buổi Mentoring Chấm CP2 sẽ diễn ra lúc 15:00 - 16:30 hôm nay (2026-07-30) "
                  "tại Discord Voice 1."),
-    # (msg_9700 là seed tổng hợp thêm — bản gốc mock_ui chỉ có tin HỦY, không có tin
-    #  công bố ban đầu; thêm vào để demo được đúng luồng "hủy" chỗ khó ① trong spec.md)
     dict(msg_id="msg_9700", channel="lich-hoc-moi", sender="Coach Quân",
          created_at="2026-07-27T10:00:00",
          content="WORKSHOP TỰ CHỌN: 'Kỹ năng Prompting Nâng Cao' diễn ra sáng Thứ 7 (2026-08-01, 09:30 - 11:30)."),

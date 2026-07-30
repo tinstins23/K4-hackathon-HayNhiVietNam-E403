@@ -73,8 +73,7 @@ def _should_ingest(sender_role: str, channel: str) -> bool:
 
 def ingest_message(msg_id, channel, sender, sender_role, content, created_at=None,
                     is_edited=False, reference_date=None):
-    """Điểm vào chính. Gọi hàm này mỗi khi có 1 tin nhắn mới/sửa từ Discord (qua bot
-    listener thật, hoặc qua endpoint /ingest khi seed/test)."""
+    """Điểm vào chính. Gọi hàm này mỗi khi có 1 tin nhắn mới/sửa từ Discord."""
     msg = upsert_message(msg_id, channel, sender, sender_role, content, created_at, is_edited)
 
     result = {"message": msg, "extraction": None}
@@ -131,6 +130,5 @@ TIN NHẮN CẦN TRÍCH XUẤT (từ {sender}, role={sender_role}, kênh #{chann
         )
     elif action == "cancel" and target_id:
         result["schedule"] = cancel_schedule(target_id, source_msg_id=msg_id, source_channel=channel)
-    # action == "ignore" -> không làm gì thêm, raw message vẫn đã được lưu ở trên
 
     return result

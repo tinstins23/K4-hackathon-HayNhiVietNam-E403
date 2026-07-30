@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Discord AI Schedule Assistant - Prototype Demo</title>
+    <title>Discord AI Schedule Assistant - Intelligence & Planning Prototype</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -188,7 +188,7 @@
             fill: var(--text-heading);
         }
 
-        /* User Profile Strip at Sidebar Bottom */
+        /* User Profile Strip */
         .user-strip {
             margin-top: auto;
             background-color: #232428;
@@ -266,7 +266,7 @@
         }
 
         .ctrl-btn:hover {
-            background-color: rgba(255,255,255,0.07);
+            background-color: rgba(255, 255, 255, 0.07);
             color: var(--text-normal);
         }
 
@@ -285,7 +285,7 @@
             align-items: center;
             gap: 12px;
             background-color: var(--bg-primary);
-            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         }
 
         .chat-header h3 {
@@ -382,8 +382,14 @@
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(6px); }
-            to { opacity: 1; transform: translateY(0); }
+            from {
+                opacity: 0;
+                transform: translateY(6px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
         .avatar {
@@ -494,22 +500,6 @@
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
 
-        .schedule-item.item-canceled {
-            opacity: 0.6;
-            border-left: 3px solid var(--tag-mandatory);
-        }
-
-        .schedule-info h4 {
-            color: var(--text-heading);
-            font-size: 14px;
-            margin-bottom: 4px;
-        }
-
-        .schedule-info p {
-            color: var(--text-muted);
-            font-size: 12px;
-        }
-
         .badge {
             font-size: 11px;
             padding: 4px 8px;
@@ -521,7 +511,6 @@
         .badge-mandatory { background: rgba(237, 66, 69, 0.2); color: var(--tag-mandatory); }
         .badge-optional { background: rgba(87, 242, 135, 0.2); color: var(--tag-optional); }
         .badge-deadline { background: rgba(254, 231, 92, 0.2); color: var(--tag-deadline); }
-        .badge-canceled { background: rgba(148, 155, 164, 0.2); color: var(--tag-canceled); }
 
         .source-link {
             font-size: 12px;
@@ -640,7 +629,7 @@
     <div class="server-strip">
         <div class="discord-home-btn" title="Discord Direct Messages">
             <svg class="discord-logo-svg" viewBox="0 0 127.14 96.36">
-                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22c2.65-27.15-4.8-50.93-18.9-72.15ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.92,53.88,53,48.81,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.92,96.12,53,91.07,65.69,84.69,65.69Z"/>
+                <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22c2.65-27.15-4.8-50.93-18.9-72.15ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,45.92,53.88,53,48.81,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,45.92,96.12,53,91.07,65.69,84.69,65.69Z" />
             </svg>
         </div>
         <div class="server-separator"></div>
@@ -651,7 +640,9 @@
     <div class="sidebar">
         <div class="server-header">
             <span>AI Thực Chiến - B03</span>
-            <svg style="width:16px; height:16px; fill:var(--text-muted);" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+            <svg style="width:16px; height:16px; fill:var(--text-muted);" viewBox="0 0 24 24">
+                <path d="M7 10l5 5 5-5z" />
+            </svg>
         </div>
 
         <div class="channel-category">
@@ -659,11 +650,15 @@
         </div>
         <div class="channel-list">
             <div class="channel-item" onclick="switchChannel('thong-bao-chung')">
-                <svg class="channel-svg-icon" viewBox="0 0 24 24"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z" />
+                </svg>
                 # thong-bao-chung
             </div>
             <div class="channel-item" onclick="switchChannel('lich-hoc-moi')">
-                <svg class="channel-svg-icon" viewBox="0 0 24 24"><path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z"/></svg>
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V10h14v10zm0-12H5V6h14v2z" />
+                </svg>
                 # lich-hoc-moi
             </div>
         </div>
@@ -673,7 +668,9 @@
         </div>
         <div class="channel-list">
             <div class="channel-item active" onclick="switchChannel('tro-ly-lich-trinh')">
-                <svg class="channel-svg-icon" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z"/></svg>
+                <svg class="channel-svg-icon" viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 9h12v2H6V9zm8 5H6v-2h8v2zm4-6H6V6h12v2z" />
+                </svg>
                 # tro-ly-lich-trinh
             </div>
         </div>
@@ -699,10 +696,12 @@
 
     <!-- Main Chat Window -->
     <div class="main-chat">
-        
+
         <div class="chat-header">
             <h3 id="channelHeaderTitle">
-                <svg style="width:20px; height:20px; fill:var(--text-muted);" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
+                <svg style="width:20px; height:20px; fill:var(--text-muted);" viewBox="0 0 24 24">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z" />
+                </svg>
                 # tro-ly-lich-trinh
             </h3>
             <span class="topic" id="channelHeaderTopic">Kênh tương tác hỏi đáp & tự động lập thời khóa biểu tối ưu từ DB Discord</span>
@@ -715,10 +714,10 @@
             </div>
             <div class="admin-btn-group">
                 <button class="btn-demo-admin" id="btnPostNewSpec" onclick="triggerInstructorPostNewSpec()">
-                    ➕ Giảng viên đăng: "Gia hạn Spec.md sang 12:00 N2"
+                    ➕ Giảng viên đăng: "Gia hạn Spec.md sang 12:00 N2 (#msg_9999)"
                 </button>
                 <button class="btn-demo-admin" id="btnEditMentoring" onclick="triggerInstructorEditMentoring()">
-                    ✏️ Coach Hùng sửa bài: "Mentoring CP2 dời sang 19:30"
+                    ✏️ Coach Hùng sửa bài: "Mentoring CP2 dời sang 19:30 (#msg_9821)"
                 </button>
             </div>
         </div>
@@ -727,22 +726,22 @@
             <!-- Content rendered dynamically -->
         </div>
 
-        <!-- Natural Quick Demo Prompt Chips -->
+        <!-- High-Intelligence AI Planning & Natural Prompt Chips -->
         <div class="demo-prompt-bar" id="demoPromptBar">
-            <div class="prompt-chip" onclick="executeNaturalPrompt(1)">
-                💬 <span>"Xếp thời khóa biểu tuần này, sáng T4 bận việc 09:00-11:30"</span>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(1)">
+                🧠 <span>1. Plan Tháng (Multi-Constraint): "Bận thi 10-14/8 & công tác 22-25/8, lập plan nộp Capstone không bị quá tải"</span>
             </div>
-            <div class="prompt-chip" onclick="executeNaturalPrompt(2)">
-                💬 <span>"Chiều nay có cần vào Discord Voice 1 học không hay dời giờ rồi?"</span>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(2)">
+                ⚖️ <span>2. Xung đột 3 Lịch (Trade-off): "Tối T5 bị trùng 3 việc (Mentoring, Họp Capstone & Spec Deadline), AI giải quyết sao?"</span>
             </div>
-            <div class="prompt-chip" onclick="executeNaturalPrompt(3)">
-                💬 <span>"Tối nay từ 19:00 đến 21:00 tôi rảnh, có bài tập hay workshop nào nên làm không?"</span>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(3)">
+                💬 <span>3. Thích ứng Deadline (Post Mới): "Tối nay nhóm bận làm slide đến 22:00, có kịp làm Spec.md nộp trước hạn không?"</span>
             </div>
-            <div class="prompt-chip" onclick="executeNaturalPrompt(4)">
-                💬 <span>"Hạn nộp Spec.md CP4 chính xác là mấy giờ thế mọi người?"</span>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(4)">
+                🔄 <span>4. Tự điều chỉnh sau khi Sửa/Hủy: "Chiều nay Coach dời lịch & T7 bị hủy, AI xếp lại thời khóa biểu tuần bù vào đâu?"</span>
             </div>
-            <div class="prompt-chip" onclick="executeNaturalPrompt(5)">
-                💬 <span>"Nhờ AI báo Giảng viên xin lùi deadline cho nhóm tôi sang ngày mai được không?"</span>
+            <div class="prompt-chip" onclick="executeIntelligencePrompt(5)">
+                💬 <span>5. Soạn Đàm phán Lịch bù: "Bị trùng lịch thi trường với Mentoring CP2, AI soạn tin nhắn mẫu cho Coach & tìm slot bù"</span>
             </div>
         </div>
 
@@ -755,17 +754,25 @@
     <script>
         let currentChannel = 'tro-ly-lich-trinh';
 
-        // State Flags for Real-Time Announcement Edits/Appends
         let stateHasNewSpecExtension = false;
         let stateHasEditedMentoringTime = false;
 
-        // Dynamic Channel Data
+        // Rich Multi-Message Data Pack for Announcement Feed (20+ Messages)
         const channelsData = {
             'thong-bao-chung': {
                 title: '# thong-bao-chung',
                 topic: 'Thông báo chính thức từ BTC và Giảng viên (Chỉ đọc)',
                 isReadOnly: true,
                 messages: [
+                    {
+                        msgId: 'msg_9801',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: '28/07 lúc 08:00',
+                        text: '🚀 **KHAI MẠC HACKATHON BATCH 03**: Phát đề bài và phát động CP1 Chốt Canvas (09:00 - 11:30 ngày 1). Mọi người tập trung tại Main Stage!'
+                    },
                     {
                         msgId: 'msg_9844',
                         sender: 'Giảng viên Tín',
@@ -783,6 +790,33 @@
                         avatarText: 'BTC',
                         time: 'Hôm nay lúc 11:00',
                         text: '🚨 **LƯU Ý HẠN NỘP BÀI CP4**: Hạn cứng nộp file `spec.md` là đúng **23:59 ngày 1 (Hôm nay)**. Sau thời gian này hệ thống tự động khóa nhận bài!'
+                    },
+                    {
+                        msgId: 'msg_10010',
+                        sender: 'Giảng viên Tín',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'GV',
+                        time: '28/07 lúc 14:00',
+                        text: '📌 **LỊCH WEEK 2**: Thứ 2 tới (03/08 09:00 - 11:30) khởi động Module 4 - **Agentic RAG & GraphRAG**. Hạn nộp Bài Lab 4 vào 23:59 Thứ 6 (07/08). Khối lượng ước tính: 8 tiếng.'
+                    },
+                    {
+                        msgId: 'msg_10100',
+                        sender: 'Hội Đồng Chấm Capstone',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'HĐ',
+                        time: '25/07 lúc 10:00',
+                        text: '🏆 **BẢN ĐỒ THÁNG 8**: Hạn chốt nộp Đề xuất Đồ án Tốt nghiệp Capstone là **23:59 ngày 15/08**. Khối lượng thực hiện ước tính: 15-20 tiếng.'
+                    },
+                    {
+                        msgId: 'msg_10200',
+                        sender: 'BTC Hackathon',
+                        roleClass: 'instructor-name',
+                        avatarClass: 'instructor',
+                        avatarText: 'BTC',
+                        time: '20/07 lúc 15:00',
+                        text: '🎉 **LỄ BẾ MẠC & DEMO DAY CAPSTONE**: Diễn ra vào **18:00 - 21:00 ngày 28/08** tại Discord Stage & Offline.'
                     }
                 ]
             },
@@ -802,13 +836,40 @@
                         text: '📢 **THAY ĐỔI LỊCH MENTORING**: Buổi Mentoring Chấm CP2 chiều nay diễn ra lúc **17:00 - 18:00** tại **Discord Voice 1**. Các nhóm lưu ý vào đúng giờ!'
                     },
                     {
+                        msgId: 'msg_9905',
+                        sender: 'Coach Quân',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'CQ',
+                        time: 'Hôm nay lúc 13:00',
+                        text: '📌 **LỊCH CP5**: Chiều Thứ 5 (14:00 - 16:00) tiến hành Dry Run & Kiểm tra 4 lớp chỗ khó với từng nhóm tại Voice 2.'
+                    },
+                    {
                         msgId: 'msg_9950',
                         sender: 'BTC Hackathon',
                         roleClass: 'instructor-name',
                         avatarClass: 'instructor',
                         avatarText: 'BTC',
                         time: 'Hôm nay lúc 14:15',
-                        text: '❌ **THÔNG BÁO HỦY LỊCH**: Do server Discord bảo trì định kỳ, buổi Workshop tự chọn *"Kỹ năng Prompting Nâng Cao"* sáng Thứ 7 (09:30 - 11:30) **ĐÃ BỊ HỦY**. BTC sẽ xếp lịch bù sau!'
+                        text: '❌ **THÔNG BÁO HỦY LỊCH**: Do server Discord bảo trì định kỳ, buổi Workshop tự chọn *"Kỹ năng Prompting Nâng Cao"* sáng Thứ 7 (09:30 - 11:30) **ĐÃ BỊ HỦY**.'
+                    },
+                    {
+                        msgId: 'msg_10025',
+                        sender: 'Coach Hùng',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'CH',
+                        time: '29/07 lúc 16:00',
+                        text: '💬 **LỊCH TUẦN 2**: Mở thêm slot 1-on-1 Code Review & Fix bug với Coach vào **15:00 - 16:30 Thứ 4 (05/08)** tại Discord Voice 3.'
+                    },
+                    {
+                        msgId: 'msg_10150',
+                        sender: 'Mentor Doanh Nghiệp',
+                        roleClass: 'coach-name',
+                        avatarClass: 'coach',
+                        avatarText: 'MT',
+                        time: '26/07 lúc 11:00',
+                        text: '🌟 **WORKSHOP THÁNG 8**: Session Định hướng Sự nghiệp & Review CV 1-1 với Mentor diễn ra vào **19:30 - 21:30 ngày 20/08** trên Discord Stage.'
                     }
                 ]
             },
@@ -822,7 +883,7 @@
                         sender: 'Schedule AI Assistant',
                         isBot: true,
                         time: 'Hôm nay lúc 15:00',
-                        text: 'Xin chào! Tôi là **Trợ lý AI Quản Lý Lịch Trình**. Tôi có thể giúp bạn kiểm tra lịch học, đối soát lịch bận cá nhân hoặc giải đáp mọi thay đổi đột xuất từ kênh thông báo Discord.\n\n💡 *Tip Demo*: Bạn có thể bấm sang kênh `#thong-bao-chung` hoặc `#lich-hoc-moi` bấm nút Giả lập Giảng viên đăng/sửa thông báo mới, sau đó quay lại hỏi để thấy AI cập nhật câu trả lời linh hoạt!'
+                        text: 'Xin chào! Tôi là **Trợ lý AI Quản Lý & Lập Kế Hoạch Lịch Trình (ReAct Reasoning Engine)**.\n\nTôi giúp học viên **lập thời khóa biểu**, **tự điều chỉnh khi giảng viên sửa/đăng thông báo mới**, và **tính toán rủi ro tiến độ**!\n\nHãy bấm thử các câu hỏi kịch bản học viên bên dưới:'
                     }
                 ]
             }
@@ -834,7 +895,7 @@
             stateHasNewSpecExtension = true;
 
             const btn = document.getElementById('btnPostNewSpec');
-            if(btn) {
+            if (btn) {
                 btn.classList.add('active-posted');
                 btn.innerHTML = '✓ BTC đã gia hạn Spec (#msg_9999)!';
             }
@@ -852,7 +913,7 @@
             if (currentChannel === 'thong-bao-chung') {
                 renderChannel('thong-bao-chung', 'msg_9999');
             } else {
-                alert('🔔 BTC vừa đăng thông báo gia hạn mới trong #thong-bao-chung! AI đã đồng bộ vào DB.');
+                alert('🔔 BTC vừa đăng thông báo gia hạn mới (#msg_9999) trong #thong-bao-chung!\n\nHãy quay lại kênh #tro-ly-lich-trinh bấm nút Nút 3 để xem AI điều chỉnh thời khóa biểu!');
             }
         }
 
@@ -862,13 +923,13 @@
             stateHasEditedMentoringTime = true;
 
             const btn = document.getElementById('btnEditMentoring');
-            if(btn) {
+            if (btn) {
                 btn.classList.add('active-posted');
                 btn.innerHTML = '✓ Coach Hùng đã sửa bài #msg_9821!';
             }
 
             const msg = channelsData['lich-hoc-moi'].messages.find(m => m.msgId === 'msg_9821');
-            if(msg) {
+            if (msg) {
                 msg.isEdited = true;
                 msg.time = 'Hôm nay lúc 09:30 (Sửa lúc 16:22)';
                 msg.text = '📢 **THAY ĐỔI LỊCH MENTORING (CẬP NHẬT)**: Buổi Mentoring Chấm CP2 chiều nay dời lại tối sang slot **19:30 - 20:30** tại **Discord Voice 1**. Các nhóm lưu ý mốc giờ mới!';
@@ -877,7 +938,7 @@
             if (currentChannel === 'lich-hoc-moi') {
                 renderChannel('lich-hoc-moi', 'msg_9821');
             } else {
-                alert('✏️ Coach Hùng vừa sửa tin nhắn dời giờ Mentoring sang 19:30 trong #lich-hoc-moi!');
+                alert('✏️ Coach Hùng vừa sửa tin nhắn #msg_9821 dời giờ Mentoring sang 19:30 trong #lich-hoc-moi!\n\nHãy quay lại kênh #tro-ly-lich-trinh bấm Nút 4 để thấy AI cập nhật!');
             }
         }
 
@@ -888,7 +949,7 @@
 
             document.querySelectorAll('.channel-item').forEach(el => el.classList.remove('active'));
             const activeEl = Array.from(document.querySelectorAll('.channel-item')).find(el => el.textContent.includes(channelKey));
-            if(activeEl) activeEl.classList.add('active');
+            if (activeEl) activeEl.classList.add('active');
 
             document.getElementById('channelHeaderTitle').innerHTML = `
                 <svg style="width:20px; height:20px; fill:var(--text-muted);" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
@@ -902,17 +963,17 @@
             data.messages.forEach(msg => {
                 const group = document.createElement('div');
                 group.className = 'message-group';
-                if(msg.msgId) group.id = msg.msgId;
+                if (msg.msgId) group.id = msg.msgId;
 
                 let avatarHTML = '';
-                if(msg.isBot) {
+                if (msg.isBot) {
                     avatarHTML = `<div class="avatar ai-bot">AI</div>`;
                 } else {
                     avatarHTML = `<div class="avatar ${msg.avatarClass || ''}">${msg.avatarText || 'HV'}</div>`;
                 }
 
                 let nameHTML = '';
-                if(msg.isBot) {
+                if (msg.isBot) {
                     nameHTML = `<div class="user-name">Schedule AI Assistant <span class="bot-badge">✓ BOT</span> <span class="timestamp">${msg.time}</span></div>`;
                 } else {
                     let editedLabel = msg.isEdited ? `<span class="edited-tag">(đã chỉnh sửa)</span>` : '';
@@ -920,7 +981,7 @@
                 }
 
                 let contentHTML = `<div class="message-text">${msg.text.replace(/\n/g, '<br/>')}</div>`;
-                if(msg.embed) {
+                if (msg.embed) {
                     contentHTML += msg.embed;
                 }
 
@@ -938,7 +999,7 @@
             const promptBar = document.getElementById('demoPromptBar');
             const inputContainer = document.getElementById('inputContainer');
 
-            if(data.isReadOnly) {
+            if (data.isReadOnly) {
                 adminBar.style.display = 'flex';
                 promptBar.style.display = 'none';
                 inputContainer.innerHTML = `
@@ -952,16 +1013,16 @@
                 promptBar.style.display = 'flex';
                 inputContainer.innerHTML = `
                     <div class="input-wrapper">
-                        <input type="text" placeholder="Hỏi AI về lịch học hoặc yêu cầu xếp thời khóa biểu cá nhân hóa..." id="userInput" onkeydown="if(event.key==='Enter') handleUserSubmit()">
+                        <input type="text" placeholder="Hỏi AI về lịch học hoặc nhờ AI lập kế hoạch cá nhân hóa..." id="userInput" onkeydown="if(event.key==='Enter') handleUserSubmit()">
                         <button class="btn-send" onclick="handleUserSubmit()">Gửi Yêu Cầu</button>
                     </div>
                 `;
             }
 
-            if(targetMsgId) {
+            if (targetMsgId) {
                 setTimeout(() => {
                     const targetEl = document.getElementById(targetMsgId);
-                    if(targetEl) {
+                    if (targetEl) {
                         targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                         targetEl.classList.add('highlight-source');
                         setTimeout(() => {
@@ -982,127 +1043,172 @@
             renderChannel(key);
         }
 
-        // Natural Student Queries with Dynamic AI Adaptability
-        function executeNaturalPrompt(promptIndex) {
-            if(currentChannel !== 'tro-ly-lich-trinh') {
+        // Advanced AI Planning & Natural Student Prompt Handlers
+        function executeIntelligencePrompt(promptIndex) {
+            if (currentChannel !== 'tro-ly-lich-trinh') {
                 renderChannel('tro-ly-lich-trinh');
             }
 
-            if(promptIndex === 1) {
-                appendUserMsg("Xếp cho tôi thời khóa biểu tuần này, sáng T4 bận việc 09:00-11:30");
+            if (promptIndex === 1) {
+                // MULTI-CONSTRAINT MONTHLY STRATEGIC PLAN
+                appendUserMsg("Tháng 8 này tôi bận thi học kỳ ở trường từ 10/08 - 14/08 và phải đi công tác 22/08 - 25/08. Hãy lập cho tôi kế hoạch chia nhỏ thời gian ôn tập và nộp Capstone không bị quá tải.");
                 setTimeout(() => {
-                    let mentoringTime = stateHasEditedMentoringTime ? "19:30 - 20:30 (Coach Hùng vừa sửa)" : "17:00 - 18:00";
                     appendAIMsg(
-                        "Chào bạn! Tôi đã tra cứu DB thông báo Discord và né khoảng thời gian bận **Sáng T4 (09:00 - 11:30)** của bạn:",
+                        "🧠 **AI REASONING & STRATEGIC PLANNING RESPONSE**:\n\nTôi đã đối soát 2 khoảng bận của bạn (**Thi trường 10-14/08** & **Công tác 22-25/08**) với Deadline Capstone (**15/08** - ước tính khối lượng 20 tiếng). Để **tránh quá tải rủi ro vỡ nợ trước tuần thi**, AI đề xuất kế hoạch phân bổ Sprint học tập tối ưu như sau:",
                         `
-                        <div class="embed-card">
-                            <div class="embed-title">🗓️ THỜI KHÓA BIỂU ĐỀ XUẤT (Đã né lịch bận)</div>
+                        <div class="embed-card" style="border-left-color: #57f287;">
+                            <div class="embed-title" style="color: #57f287;">🚀 LỘ TRÌNH LẬP KẾ HOẠCH HỌC TẬP THÁNG 8 (ĐÃ NÉ 2 KHOẢNG BẬN)</div>
                             <div class="schedule-grid">
                                 <div class="schedule-item">
                                     <div class="schedule-info">
-                                        <h4>Thứ 3 (${mentoringTime}): Buổi Chấm Mentoring CP2</h4>
-                                        <p>Địa điểm: Discord Voice 1 | Phụ trách: Coach Hùng</p>
-                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Jump to thông báo gốc #msg_9821</span>
+                                        <h4>Phase 1 (01/08 - 09/08): SPRINT ĐẦU TƯ TẬP TRUNG (Hoàn thành 70% Capstone)</h4>
+                                        <p>Chiến lược: Dồn làm Capstone 2.5h/ngày trước khi bước vào tuần thi trường (Tổng 15h)</p>
                                     </div>
-                                    <span class="badge badge-mandatory">BẮT BUỘC</span>
+                                    <span class="badge badge-optional">PHASE CHỦ ĐẠO</span>
                                 </div>
                                 <div class="schedule-item">
                                     <div class="schedule-info">
-                                        <h4>Thứ 4 (14:00 - 16:30): Học Online Live - ReAct & Function Calling</h4>
-                                        <p>Đã né Sáng T4 | Zoom Class | Giảng viên Tín</p>
-                                        <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9844')">🔗 Jump to thông báo gốc #msg_9844</span>
+                                        <h4>Phase 2 (10/08 - 14/08): TẠM HOÃN HỌC AI -> TẬP TRUNG THI HỌC KỲ</h4>
+                                        <p>Chiến lược: Giảm tải AI xuống 0.5h/ngày rảnh nhẹ. Né 100% rủi ro quá tải thi cử.</p>
                                     </div>
-                                    <span class="badge badge-mandatory">BẮT BUỘC</span>
+                                    <span class="badge badge-mandatory">NÉ LỊCH BẬN THI</span>
                                 </div>
                                 <div class="schedule-item">
                                     <div class="schedule-info">
-                                        <h4>Thứ 5 (19:00 - 21:00): Slot đề xuất hoàn thiện Spec.md</h4>
-                                        <p>Gợi ý AI: Slot tối T5 rảnh để kịp chép spec</p>
+                                        <h4>Phase 3 (15/08 19:00 - 23:59): CHỐT & NỘP BÀI CAPSTONE</h4>
+                                        <p>Nộp bài hoàn thiện trước 23:59 theo thông báo #msg_10100</p>
+                                        <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_10100')">🔗 Jump to thông báo #msg_10100</span>
                                     </div>
-                                    <span class="badge badge-optional">ĐỀ XUẤT AI</span>
+                                    <span class="badge badge-deadline">DEADLINE</span>
                                 </div>
                             </div>
                         </div>
                         `
                     );
                 }, 700);
-            } else if(promptIndex === 2) {
-                appendUserMsg("Chiều nay có cần vào Discord Voice 1 học không hay dời giờ rồi?");
+            } else if (promptIndex === 2) {
+                // 3-WAY CONFLICT TRADE-OFF SOLVER WITH DYNAMIC SPEC EXTENSION CHECK
+                appendUserMsg("Tối Thứ 5 tuần này (19:30 - 21:30) tôi vừa có lịch Mentoring CP2 dời lại, vừa có hẹn họp nhóm Capstone và lại sát Hạn nộp Spec.md. AI hãy giải quyết xung đột 3 việc này giúp tôi.");
                 setTimeout(() => {
-                    if (stateHasEditedMentoringTime) {
-                        appendAIMsg(
-                            "🔄 **CÓ THAY ĐỔI**: **Coach Hùng** vừa sửa tin nhắn **#msg_9821** dời lịch buổi học chiều nay!",
-                            `
-                            <div class="embed-card" style="border-left-color: #f1c40f;">
-                                <div class="embed-title" style="color: #f1c40f;">📌 GIỜ MỚI NHẤT (ĐÃ CHỈNH SỬA): 19:30 - 20:30</div>
-                                <p style="font-size: 14px; color: var(--text-normal);">
-                                    Chiều nay lúc 17:00 KHÔNG cần vào Voice 1. Buổi Mentoring Chấm CP2 đã được Coach dời sang tối nay lúc <strong>19:30 - 20:30</strong> tại Voice 1.
-                                </p>
-                                <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Jump to tin nhắn vừa edit (#msg_9821) trong #lich-hoc-moi</span>
-                            </div>
-                            `
-                        );
-                    } else {
-                        appendAIMsg(
-                            "Có! Theo thông báo **#msg_9821** từ **Coach Hùng**, chiều nay bạn cần vào **Discord Voice 1** đúng giờ:",
-                            `
-                            <div class="embed-card">
-                                <div class="embed-title">📍 LỊCH MENTORING CHẮM CP2 (Chiều Nay)</div>
-                                <p style="font-size: 14px; color: var(--text-normal);">
-                                    ⏱ <strong>Thời gian</strong>: 17:00 - 18:00 (Hôm nay)<br/>
-                                    🔊 <strong>Địa điểm</strong>: Discord Voice 1<br/>
-                                    👤 <strong>Phụ trách</strong>: Coach Hùng
-                                </p>
-                                <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Jump to thông báo gốc #msg_9821</span>
-                            </div>
-                            `
-                        );
-                    }
-                }, 700);
-            } else if(promptIndex === 3) {
-                appendUserMsg("Tối nay từ 19:00 đến 21:00 tôi rảnh, có bài tập hay workshop nào nên làm không?");
-                setTimeout(() => {
-                    let deadlineText = stateHasNewSpecExtension ? "Hạn Spec đã gia hạn sang 12:00 N2" : "Hạn nộp Spec sắp chốt 23:59 hôm nay!";
+                    let mentoringStatus = stateHasEditedMentoringTime ? "Lịch Mentoring CP2 của Coach Hùng đã dời sang 19:30 (#msg_9821)" : "Lịch Mentoring hiện tại 17:00 (#msg_9821)";
+                    let specNotice = stateHasNewSpecExtension 
+                        ? "🎉 **TIN MỚI**: BTC vừa gia hạn nộp Spec.md sang **12:00 Ngày 2 (#msg_9999)** nên áp lực tối T5 đã giảm!" 
+                        : "⏰ Hạn nộp Spec.md chốt 23:59 hôm nay (#msg_9890).";
+                    let specSlotText = stateHasNewSpecExtension
+                        ? "Dời slot làm Spec sang Sáng Ngày 2 (do BTC đã gia hạn #msg_9999)"
+                        : "Tập trung nộp Spec.md từ 17:00 - 19:00 (trước hạn 23:59 #msg_9890)";
+                    
                     appendAIMsg(
-                        `Khoảng thời gian 19:00 - 21:00 tối nay bạn không có lịch học bắt buộc. Dưới đây là gợi ý từ AI:\n\n💡 *Gợi ý*: Sử dụng slot rảnh này để tập trung hoàn thiện file **\`spec.md\`** cùng nhóm. (${deadlineText})`
+                        `⚖️ **AI TRADE-OFF & CONFLICT SOLVER**:\n\nPhát hiện xung đột các công việc Tối T5. ${mentoringStatus}.\n${specNotice}\n\nAI đề xuất giải pháp điều phối thời gian:`,
+                        `
+                        <div class="embed-card" style="border-left-color: ${stateHasNewSpecExtension ? '#57f287' : '#fee75c'};">
+                            <div class="embed-title" style="color: ${stateHasNewSpecExtension ? '#57f287' : '#fee75c'};">🔀 PHƯƠNG ÁN ĐỀ XUẤT ĐÁNH ĐỔI (TRADE-OFF RESOLUTION)</div>
+                            <div class="schedule-grid">
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Spec.md: ${specSlotText}</h4>
+                                        <span class="source-link" onclick="jumpToMessage('thong-bao-chung', stateHasNewSpecExtension ? 'msg_9999' : 'msg_9890')">🔗 Source #${stateHasNewSpecExtension ? 'msg_9999' : 'msg_9890'}</span>
+                                    </div>
+                                    <span class="badge badge-deadline">SPEC DEADLINE</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Mentoring CP2: Tham gia Voice 1 (${stateHasEditedMentoringTime ? '19:30 - 20:30' : '17:00 - 18:00'})</h4>
+                                        <p>Sự kiện bắt buộc chấm điểm với Coach Hùng</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Source #msg_9821</span>
+                                    </div>
+                                    <span class="badge badge-mandatory">BẮT BUỘC</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Slot Họp Nhóm Capstone: Dời sang 20:00 - 21:30 Tối T6</h4>
+                                        <p>Tối T6 tất cả thành viên trong nhóm bạn đều rảnh.</p>
+                                    </div>
+                                    <span class="badge badge-optional">ĐỀ XUẤT DỜI HỌP</span>
+                                </div>
+                            </div>
+                        </div>
+                        `
                     );
                 }, 700);
-            } else if(promptIndex === 4) {
-                appendUserMsg("Hạn nộp Spec.md CP4 chính xác là mấy giờ thế mọi người?");
+            } else if (promptIndex === 3) {
+                // NATURAL STUDENT QUERY FOR DEADLINE PLANNING & SPEC EXTENSION
+                appendUserMsg("Tối nay nhóm bận làm slide đến 22:00, có kịp làm Spec.md nộp trước hạn không AI?");
                 setTimeout(() => {
                     if (stateHasNewSpecExtension) {
                         appendAIMsg(
-                            "📢 **THÔNG BÁO GIA HẠN MỚI**: BTC vừa đăng thông báo mới **#msg_9999** trong `#thong-bao-chung`!",
+                            "📢 **KỊP HOÀN TOÀN! (CẬP NHẬT THÔNG BÁO MỚI #msg_9999)**:\n\nBTC vừa đăng thông báo gia hạn mới trong `#thong-bao-chung` (#msg_9999)! Hạn nộp `spec.md` đã được dời từ 23:59 hôm nay sang **12:00 Trưa Ngày 2**.\n\n👉 **Gợi ý AI**: Nhóm bạn cứ yên tâm làm slide tối nay đến 22:00, sau đó dành Sáng mai (08:30 - 11:30) để chốt nộp Spec!",
                             `
                             <div class="embed-card" style="border-left-color: #57f287;">
-                                <div class="embed-title" style="color: #57f287;">🎉 HẠN CỨNG MỚI: 12:00 TRƯA NGÀY 2</div>
+                                <div class="embed-title" style="color: #57f287;">🎉 CHÍNH THỨC GIA HẠN SPEC.MD SANG 12:00 TRƯA NGÀY 2</div>
                                 <p style="font-size: 14px; color: var(--text-normal);">
-                                    BTC đã gia hạn nộp <code>spec.md</code> sang <strong>12:00 Ngày 2</strong> (thay vì 23:59 hôm nay).
+                                    Thông báo mới nhất (#msg_9999): BTC quyết định GIA HẠN nộp file Spec.md sang <strong>12:00 Ngày 2</strong>.
                                 </p>
-                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9999')">🔗 Jump to thông báo gia hạn mới nhất (#msg_9999)</span>
+                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9999')">🔗 Click để Jump to thông báo vừa đăng (#msg_9999)</span>
                             </div>
                             `
                         );
                     } else {
                         appendAIMsg(
-                            "Theo thông báo chính thức hiện tại từ BTC trong `#thong-bao-chung`:",
+                            "⚠️ **CẢNH BÁO NGUY CƠ TRỄ DEADLINE (70%)**:\n\nTheo thông báo hiện tại `#msg_9890` trong `#thong-bao-chung`, hạn nộp cứng Spec.md là **23:59 Hôm nay**.\n\nNếu nhóm làm slide tới 22:00 thì chỉ còn đúng **1 tiếng 59 phút** để chốt Spec, rủi ro không kịp nộp bài rất cao!\n\n👉 **Gợi ý AI**: Nhóm nên ưu tiên hoàn thành Spec.md trước 21:00 để nộp đúng hạn, sau đó mới làm slide.\n\n💡 *Tip Demo*: Nếu BTC đăng bài gia hạn mới, AI sẽ tự điều chỉnh lời khuyên này!",
                             `
-                            <div class="embed-card" style="border-left-color: var(--tag-deadline);">
-                                <div class="embed-title" style="color: var(--tag-deadline);">⏰ HẠN CỨNG NỘP SPEC.MD (CP4)</div>
-                                <p style="font-size: 14px; color: var(--text-normal);">
-                                    Hạn nộp bài cứng: <strong>23:59 Ngày 1 (Hôm nay)</strong>.
-                                </p>
-                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9890')">🔗 Jump to tin nhắn gốc từ BTC (#msg_9890)</span>
+                            <div class="embed-card" style="border-left-color: #fee75c;">
+                                <div class="embed-title" style="color: #fee75c;">⏰ HẠN CỨNG HIỆN TẠI: 23:59 HÔM NAY</div>
+                                <span class="source-link" onclick="jumpToMessage('thong-bao-chung', 'msg_9890')">🔗 Jump to thông báo gốc hiện tại (#msg_9890)</span>
                             </div>
                             `
                         );
                     }
                 }, 700);
-            } else if(promptIndex === 5) {
-                appendUserMsg("Nhờ AI báo Giảng viên xin lùi deadline cho nhóm tôi sang ngày mai được không?");
+            } else if (promptIndex === 4) {
+                // RE-OPTIMIZATION AFTER EDITS/CANCELLATIONS
+                appendUserMsg("Chiều nay Coach dời lịch & T7 bị hủy, AI hãy tính toán lại toàn bộ kế hoạch tuần này và cập nhật mốc làm bài tập bù vào đâu?");
+                setTimeout(() => {
+                    let editNotice = stateHasEditedMentoringTime 
+                        ? "Coach Hùng vừa dời Mentoring CP2 sang 19:30 (#msg_9821)" 
+                        : "Coach Hùng dời giờ Mentoring CP2 (#msg_9821)";
+                    appendAIMsg(
+                        `🔄 **AI RE-SCHEDULING AFTER DYNAMIC DISCORD EDITS**:\n\nSau khi quét lại dữ liệu thông báo Discord mới nhất (${editNotice} và Workshop T7 bị hủy theo #msg_9950), AI tái cấu trúc lại tuần học của bạn:`,
+                        `
+                        <div class="embed-card">
+                            <div class="embed-title">🗓️ THỜI KHÓA BIỂU ĐÃ CẤU TRÚC LẠI TUẦN NÀY</div>
+                            <div class="schedule-grid">
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Chiều nay (RẢNH 17:00 - 18:00): Chuyển sang đọc trước Slide ReAct</h4>
+                                        <p>Do Mentoring đã dời sang 19:30 (#msg_9821), slot 17h rảnh 1 tiếng</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9821')">🔗 Jump to tin nhắn Mentoring #msg_9821</span>
+                                    </div>
+                                    <span class="badge badge-optional">SLOT RẢNH TẠO MỚI</span>
+                                </div>
+                                <div class="schedule-item">
+                                    <div class="schedule-info">
+                                        <h4>Sáng T7 (09:30 - 11:30): TẬN DỤNG SLOT HỦY WORKSHOP LÀM BÀI LAB</h4>
+                                        <p>Do Workshop T7 bị hủy (#msg_9950), tận dụng 2 tiếng rảnh này làm bài tập bù</p>
+                                        <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_9950')">🔗 Source tin hủy Workshop #msg_9950</span>
+                                    </div>
+                                    <span class="badge badge-optional">SLOT BÙ TỐI ƯU</span>
+                                </div>
+                            </div>
+                        </div>
+                        `
+                    );
+                }, 700);
+            } else if (promptIndex === 5) {
+                // NEGOTIATION TEMPLATE & ALTERNATIVE SLOT FINDER
+                appendUserMsg("Bị trùng lịch thi trường với Mentoring CP2, AI soạn tin nhắn mẫu cho Coach & tìm slot bù giúp tôi");
                 setTimeout(() => {
                     appendAIMsg(
-                        "🛡️ **AI Guardrail (Ngoài Thẩm Quyền)**:\n\nTôi chỉ là Trợ lý AI Quản lý Lịch trình và **không có thẩm quyền** nhắn tin cho Giảng viên hoặc tự dời deadline cá nhân/nhóm.\n\n👉 *Hướng dẫn*: Nếu nhóm bạn gặp sự cố cần xin nộp muộn, vui lòng gửi ticket chính thức cho Admin tại kênh `#ho-tro-hoc-vien`."
+                        "💬 **SOẠN TIN NHẮN ĐÀM PHÁN LỊCH BÙ (AI RESCHEDULING ASSISTANT)**:\n\nAI đã kiểm tra DB: Coach Hùng còn mở **1 slot Mentoring bổ sung vào 15:00 - 16:30 Thứ 4 tuần sau (05/08)** tại Voice 3 (#msg_10025).\n\nDưới đây là mẫu tin nhắn chỉn chu bạn có thể copy gửi Coach Hùng:",
+                        `
+                        <div class="embed-card" style="border-left-color: #5865f2;">
+                            <div class="embed-title">✉️ MẪU TIN NHẮN GỬI COACH HÙNG (COPY & PASTE)</div>
+                            <p style="font-size: 13px; color: var(--text-heading); font-style: italic; background: #1e1f22; padding: 10px; border-radius: 4px;">
+                                "Em chào Coach Hùng ạ! Do buổi Mentoring CP2 trùng đúng ca thi học kỳ của em ở trường, em xin phép Coach cho em đăng ký chuyển sang slot Mentoring bù vào Thứ 4 tuần sau (05/08 15:00) tại Voice 3 theo thông báo #msg_10025 được không ạ? Em cảm ơn Coach!"
+                            </p>
+                            <span class="source-link" onclick="jumpToMessage('lich-hoc-moi', 'msg_10025')">🔗 Trích dẫn slot bù #msg_10025</span>
+                        </div>
+                        `
                     );
                 }, 700);
             }
@@ -1141,14 +1247,17 @@
 
         function handleUserSubmit() {
             const input = document.getElementById('userInput');
-            if(!input || !input.value.trim()) return;
+            if (!input || !input.value.trim()) return;
 
             const text = input.value.trim();
             input.value = '';
             appendUserMsg(text);
 
             setTimeout(() => {
-                appendAIMsg(`Đã truy xuất DB thông báo và tìm kiếm kết quả cho yêu cầu: <i>"${text}"</i>...`);
+                let specResponse = stateHasNewSpecExtension
+                    ? "📢 BTC vừa đăng gia hạn Spec.md sang 12:00 Ngày 2 (#msg_9999)!"
+                    : "Hạn Spec.md hiện tại chốt 23:59 Hôm nay (#msg_9890).";
+                appendAIMsg(`Đã truy xuất DB thông báo Discord cho câu hỏi <i>"${text}"</i>:\n\n${specResponse}`);
             }, 600);
         }
 

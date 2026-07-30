@@ -20,51 +20,11 @@ from db import (
     upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS,
     list_active_schedules_for_matching, create_schedule, update_schedule, cancel_schedule,
 )
+from systemprompt import EXTRACTION_SYSTEM_PROMPT
 from openrouter_client import chat_completion, parse_json_content
 
 EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "google/gemini-2.0-flash-exp:free")
 
-EXTRACTION_SYSTEM_PROMPT = """Bạn là Extraction Agent cho hệ thống quản lý lịch trình khóa học AI Thực Chiến trên Discord.
-
-Nhiệm vụ: đọc 1 tin nhắn thông báo và quyết định nó có chứa thông tin LỊCH (buổi học, mentoring,
-deadline, workshop, sự kiện) hay không, rồi trả về đúng 1 JSON object theo schema sau, KHÔNG thêm
-text nào khác ngoài JSON:
-
-{
-  "action": "create" | "update" | "cancel" | "ignore",
-  "target_id": "<id sự kiện đang active cần update/cancel, hoặc null nếu action=create/ignore>",
-  "event": {
-    "title": "string",
-    "start_time": "YYYY-MM-DDTHH:MM:SS",
-    "end_time": "YYYY-MM-DDTHH:MM:SS hoặc null nếu không rõ",
-    "is_mandatory": true/false,
-    "category": "CLASS" | "MENTORING" | "DEADLINE" | "WORKSHOP" | "EVENT",
-    "host": "string hoặc null",
-    "location": "string hoặc null"
-  } | null
-}
-
-Quy tắc:
-- "ignore": tin nhắn KHÔNG liên quan lịch trình cụ thể (chào hỏi, thông tin chung không có mốc thời gian).
-  QUAN TRỌNG: KHÔNG được "ignore" nếu tin nhắn có chứa mốc thời gian cụ thể — dù trùng giờ với sự kiện khác,
-  đây vẫn là sự kiện riêng biệt và phải "create".
-- "create": tin nhắn báo 1 lịch/deadline CÓ CHỨA thời gian cụ thể, và tên sự kiện KHÔNG khớp với bất kỳ
-  sự kiện nào trong danh sách active (khớp theo TÊN, không phải theo thời gian). Trùng giờ ≠ trùng sự kiện.
-- "update": tin nhắn nói về việc DỜI GIỜ / SỬA THÔNG TIN của 1 sự kiện đã có trong danh sách active
-  (khớp theo TÊN buổi học / host) -> bắt buộc phải trả target_id đúng, event chứa
-  giá trị MỚI (giữ nguyên field nào không đổi bằng cách lấy lại giá trị cũ từ danh sách active).
-  QUAN TRỌNG: nếu không tìm được sự kiện nào trong active list có TÊN khớp với nội dung tin nhắn,
-  dù tin nhắn có từ "THAY ĐỔI"/"SỬA"/"DỜI" thì action phải là "create" (không được update nhầm
-  vào sự kiện khác không liên quan). target_id CHỈ được trả khi chắc chắn khớp đúng tên sự kiện.
-- "cancel": tin nhắn báo HỦY 1 sự kiện đã có trong danh sách active -> bắt buộc trả target_id đúng.
-- Không tự bịa thời gian nếu tin nhắn không nói rõ. Nếu không đủ thông tin bắt buộc (start_time) -> "ignore".
-- Ngày hiện tại (nếu tin nhắn dùng "hôm nay", "ngày mai", "thứ X tuần này") được cho trong phần CONTEXT.
-- is_mandatory=true khi: tin nhắn từ BTC/Giảng viên thông báo buổi học chính thức, kỳ thi, deadline nộp bài,
-  khai mạc/bế mạc, hoặc dùng từ "BẮT BUỘC"/"LƯU Ý"/"bắt buộc tham dự". is_mandatory=false khi: workshop
-  tự chọn, mentoring 1-on-1 đăng ký tự nguyện, hoặc tin nhắn ghi rõ "tự chọn"/"tuỳ chọn"/"không bắt buộc".
-- category: CLASS cho buổi học live/module; MENTORING cho 1-on-1/coaching; DEADLINE cho hạn nộp bài/CP;
-  WORKSHOP cho workshop/seminar; EVENT cho khai mạc/bế mạc/sự kiện đặc biệt.
-"""
 
 
 def _should_ingest(sender_role: str, channel: str) -> bool:

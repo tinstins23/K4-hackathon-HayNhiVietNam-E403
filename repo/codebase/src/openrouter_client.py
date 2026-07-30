@@ -21,13 +21,12 @@ def _api_key():
 
 
 def chat_completion(messages, model, tools=None, tool_choice=None,
-                     temperature=0.2, response_format=None, timeout=60):
+                      temperature=0.2, response_format=None, timeout=60):
     """Gọi 1 lượt chat completion. Trả về message object thô từ API
     (có thể chứa .content hoặc .tool_calls)."""
     headers = {
         "Authorization": f"Bearer {_api_key()}",
         "Content-Type": "application/json",
-        # Khuyến nghị OpenRouter, không bắt buộc nhưng giúp app hiện đúng tên trên dashboard
         "HTTP-Referer": "https://github.com/tinstins23/K4-hackathon-HayNhiVietNam-E403",
         "X-Title": "Discord Schedule Assistant",
     }
@@ -61,7 +60,6 @@ def parse_json_content(message):
     try:
         return json.loads(content)
     except json.JSONDecodeError:
-        # fallback: model đôi khi bọc ```json ... ``` dù đã set response_format
         cleaned = content.strip().strip("`")
         if cleaned.lower().startswith("json"):
             cleaned = cleaned[4:]

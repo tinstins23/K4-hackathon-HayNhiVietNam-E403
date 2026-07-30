@@ -170,7 +170,7 @@ def ask(user_query: str, reference_date: str, history: list = None, user_label: 
                 "content": json.dumps(result, ensure_ascii=False, default=str),
             })
 
-    # Hết MAX_TURNS mà model vẫn chưa chốt câu trả lời -> graceful fallback, không im lặng
+    # Hết MAX_TURNS mà model vẫn chưa chốt câu trả lời -> graceful fallback
     return {
         "reply": "Xin lỗi, câu hỏi này cần nhiều bước tra cứu hơn dự kiến. Bạn thử hỏi cụ thể hơn "
                  "(VD: nêu rõ khoảng ngày hoặc tên buổi học) giúp mình nhé, hoặc liên hệ Coach nếu gấp.",

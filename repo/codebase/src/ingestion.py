@@ -22,7 +22,7 @@ from db import (
 )
 from openrouter_client import chat_completion, parse_json_content
 
-EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "openai/gpt-4o-mini")
+EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "google/gemini-2.0-flash-exp:free")
 
 EXTRACTION_SYSTEM_PROMPT = """Bạn là Extraction Agent cho hệ thống quản lý lịch trình khóa học AI Thực Chiến trên Discord.
 

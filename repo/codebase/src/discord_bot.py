@@ -107,8 +107,12 @@ async def on_message(message):
                 await message.channel.send(embed=embed)
                 
             except Exception as e:
-                print(f"❌ [ReAct LLM Error] Lỗi xử lý AI: {e}")
-                await message.channel.send(f"⚠️ Không thể kết nối với LLM Model qua OpenRouter: {e}")
+                print(f"❌ [ReAct LLM Error Detail]: {e}")
+                default_error_msg = (
+                    "⚠️ **Hệ thống AI hiện đang bận hoặc gặp sự cố kết nối tạm thời.**\n\n"
+                    "Bạn vui lòng thử lại sau giây lát hoặc liên hệ trực tiếp Ban Tổ Chức / Coach qua các kênh chính thức nhé!"
+                )
+                await message.channel.send(default_error_msg)
 
     await bot.process_commands(message)
 

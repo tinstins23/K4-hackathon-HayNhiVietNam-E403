@@ -22,7 +22,7 @@ import json
 from db import query_schedules, search_messages, get_message, ROLE_PRIORITY
 from openrouter_client import chat_completion
 
-AGENT_MODEL = os.getenv("AGENT_MODEL", "openai/gpt-4o-mini")
+AGENT_MODEL = os.getenv("AGENT_MODEL", "google/gemini-2.0-flash-exp:free")
 MAX_TURNS = 6
 
 SYSTEM_PROMPT = """Bạn là "Schedule AI Assistant" — trợ lý AI quản lý & sắp xếp lịch trình cho học

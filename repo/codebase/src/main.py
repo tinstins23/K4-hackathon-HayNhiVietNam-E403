@@ -58,7 +58,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    citations: list
+    citations: list           # nguồn chính thức — trích dẫn được
+    references: list = []     # tin nhắn học viên — ngữ cảnh, chưa xác thực
     tool_trace: list
 
 
@@ -91,6 +92,39 @@ def chat(req: ChatRequest):
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))
     return result
+
+
+@app.get("/messages/search")
+def messages_search(keyword: str, channel: str = None, limit: int = 20,
+                     sender_role: str = None, only_official: bool = None):
+    """Tra cứu tin nhắn đã lưu — gồm cả tin nhắn học viên.
+
+    Dùng để kiểm tra dữ liệu đã vào DB đúng chưa mà không cần mở Discord:
+      GET /messages/search?keyword=deadline
+      GET /messages/search?keyword=deadline&only_official=false   (chỉ tin nhắn học viên)
+    """
+    return db.search_messages(
+        keyword, channel=channel, limit=limit,
+        sender_role=sender_role, only_official=only_official,
+    )
+
+
+@app.get("/messages/stats")
+def messages_stats():
+    """Đếm tin nhắn theo kênh + vai trò, kèm nhãn tin cậy."""
+    with db.get_conn() as conn:
+        rows = conn.execute(
+            """SELECT channel, sender_role, COUNT(*) AS count FROM messages
+               GROUP BY channel, sender_role ORDER BY count DESC"""
+        ).fetchall()
+    return {
+        "db_path": db.DB_PATH,
+        "total": sum(r["count"] for r in rows),
+        "breakdown": [
+            {**dict(r), "is_official": db.is_official_source(r["sender_role"], r["channel"])}
+            for r in rows
+        ],
+    }
 
 
 @app.get("/messages/{channel}")

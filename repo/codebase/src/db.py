@@ -22,7 +22,14 @@ import os
 from datetime import datetime, timezone
 from contextlib import contextmanager
 
-DB_PATH = os.getenv("DB_PATH", "schedules.db")
+# DB_PATH mặc định neo theo vị trí file db.py này, KHÔNG theo cwd — nếu để tương đối thì
+# chạy từ thư mục khác sẽ lặng lẽ tạo một DB rỗng mới và AI trả "không tìm thấy lịch" cho
+# mọi câu hỏi mà không báo lỗi gì. Muốn đổi chỗ lưu thì set biến môi trường DB_PATH.
+_SRC_DIR = os.path.dirname(os.path.abspath(__file__))
+_env_db_path = os.getenv("DB_PATH") or "schedules.db"
+# Đường dẫn tương đối (kể cả khi lấy từ .env) luôn được neo về thư mục src/, không theo cwd.
+# Chỉ đường dẫn tuyệt đối mới được tôn trọng nguyên vẹn.
+DB_PATH = _env_db_path if os.path.isabs(_env_db_path) else os.path.join(_SRC_DIR, _env_db_path)
 
 ROLE_PRIORITY = {
     "btc": 4,
@@ -32,7 +39,40 @@ ROLE_PRIORITY = {
     "student": 1,
 }
 
-OFFICIAL_CHANNELS = {"thong-bao-chung", "lich-hoc-moi"}
+# Kênh được coi là nguồn thông báo chính thức -> mới được trích xuất thành lịch.
+# Đặt qua biến môi trường OFFICIAL_CHANNELS (phân cách bằng dấu phẩy) để khớp tên kênh
+# THẬT trên server Discord. Nếu tên ở đây không khớp tên kênh thật thì sẽ không có lịch
+# nào được trích xuất, mà cũng KHÔNG có lỗi nào hiện ra — rất khó phát hiện.
+_DEFAULT_OFFICIAL_CHANNELS = "thong-bao-chung,lich-hoc-moi"
+OFFICIAL_CHANNELS = {
+    c.strip().lower()
+    for c in (os.getenv("OFFICIAL_CHANNELS") or _DEFAULT_OFFICIAL_CHANNELS).split(",")
+    if c.strip()
+}
+
+# Vai tối thiểu để tin nhắn được coi là nguồn chính thức.
+MIN_OFFICIAL_ROLE = "mentor"
+
+
+def is_official_source(sender_role: str, channel: str) -> bool:
+    """Tin nhắn này có đáng tin để coi là NGUỒN SỰ THẬT về lịch không?
+
+    Định nghĩa duy nhất cho cả 2 việc, để 2 chỗ không tự suy lại logic rồi lệch nhau:
+      1. `ingestion._should_ingest` — có gọi Extraction Agent ghi vào official_schedules không
+      2. field `is_official` trả kèm mỗi tin nhắn — để agent/Discord embed phân biệt
+         "trích dẫn nguồn sự thật" với "tin nhắn học viên nhắc tới, chưa xác thực"
+    """
+    return (
+        (channel or "").strip().lower() in OFFICIAL_CHANNELS
+        and ROLE_PRIORITY.get(sender_role, 0) >= ROLE_PRIORITY[MIN_OFFICIAL_ROLE]
+    )
+
+
+def _with_trust(row) -> dict:
+    """Chuyển 1 row bảng messages thành dict + gắn sẵn nhãn tin cậy."""
+    d = dict(row)
+    d["is_official"] = is_official_source(d.get("sender_role"), d.get("channel"))
+    return d
 
 
 def now_iso() -> str:
@@ -96,47 +136,43 @@ def init_db():
         )
         """)
 
-        # Tự động nâng cấp schema cho DB cũ nếu thiếu cột status hoặc updated_at
-        columns = [row[1] for row in conn.execute("PRAGMA table_info(official_schedules)").fetchall()]
-        if "status" not in columns:
-            conn.execute("ALTER TABLE official_schedules ADD COLUMN status TEXT DEFAULT 'active'")
-        if "updated_at" not in columns:
-            conn.execute("ALTER TABLE official_schedules ADD COLUMN updated_at TEXT DEFAULT ''")
-        if "source_channel" not in columns:
-            conn.execute("ALTER TABLE official_schedules ADD COLUMN source_channel TEXT DEFAULT ''")
-
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sched_time ON official_schedules(start_time, end_time)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_msg_channel ON messages(channel, created_at)")
 
-        # Nạp sẵn messages & official_schedules mẫu nếu DB mới tạo
-        count_msg = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
-        if count_msg == 0:
-            sample_msgs = [
-                ("msg_9801", "thong-bao-chung", "BTC Hackathon", "btc", "KHAI MẠC HACKATHON BATCH 03: Phát đề bài CP1 (09:00 - 11:30 ngày 1).", "2026-07-28T08:00:00", 0, None),
-                ("msg_9844", "thong-bao-chung", "Giảng viên Tín", "instructor", "Buổi học Live chiều Thứ 4 (2026-07-31 14:00 - 16:30) học ReAct Engine.", "2026-07-29T09:00:00", 0, None),
-                ("msg_9890", "thong-bao-chung", "BTC Hackathon", "btc", "LƯU Ý HẠN NỘP BÀI CP4: Hạn cứng nộp file spec.md là 23:59 hôm nay (2026-07-30).", "2026-07-30T11:00:00", 0, None),
-                ("msg_10010", "thong-bao-chung", "Giảng viên Tín", "instructor", "LỊCH WEEK 2: Module 4 Agentic RAG (03/08 09:00-11:30). Hạn nộp Lab 4 23:59 T6 (07/08).", "2026-07-28T14:00:00", 0, None),
-                ("msg_10100", "thong-bao-chung", "Hội Đồng Chấm Capstone", "instructor", "Hạn chốt nộp Đề xuất Đồ án Capstone là 23:59 ngày 2026-08-15.", "2026-07-25T10:00:00", 0, None),
-                ("msg_10200", "thong-bao-chung", "BTC Hackathon", "btc", "LỄ BẾ MẠC & DEMO DAY CAPSTONE: 18:00 - 21:00 ngày 2026-08-28.", "2026-07-20T15:00:00", 0, None),
-                ("msg_9821", "lich-hoc-moi", "Coach Hùng", "coach", "THAY ĐỔI LỊCH MENTORING: Buổi Mentoring Chấm CP2 chiều nay diễn ra lúc 17:00 - 18:00 tại Discord Voice 1.", "2026-07-30T09:30:00", 0, None),
-                ("msg_9950", "lich-hoc-moi", "BTC Hackathon", "btc", "THÔNG BÁO HỦY LỊCH: Buổi Workshop Prompting Nâng Cao sáng Thứ 7 (2026-08-01 09:30-11:30) ĐÃ BỊ HỦY do bảo trì.", "2026-07-30T14:15:00", 0, None),
-                ("msg_10025", "lich-hoc-moi", "Coach Hùng", "coach", "LỊCH TUẦN 2: Slot 1-on-1 Code Review vào 15:00 - 16:30 Thứ 4 (2026-08-05) tại Voice 3.", "2026-07-29T16:00:00", 0, None),
-            ]
-            conn.executemany("INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)", sample_msgs)
+        # Bảng khoá idempotency dùng CHUNG file DB (schedules.db) làm điểm điều phối giữa
+        # NHIỀU tiến trình (vd. lỡ chạy 2 instance discord_bot.py, hoặc chạy backfill_discord.py
+        # trong lúc bot live vẫn đang chạy). Khi 1 sự kiện Discord (msg_id) bị xử lý > 1 lần,
+        # INSERT thứ 2 sẽ đụng PRIMARY KEY và thất bại -> try_claim() trả về False -> nơi gọi
+        # biết là "đã có người xử lý rồi" và tự bỏ qua. Đây là gốc rễ sửa lỗi "trả lời 2 lần" /
+        # "tạo trùng lịch": bug không nằm ở 1 hàm cụ thể mà ở việc ingest_message()/on_message
+        # trước đây có thể bị gọi nhiều lần cho CÙNG 1 tin nhắn mà không hàm nào tự biết điều đó.
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS idempotency_locks (
+            lock_key TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL
+        )
+        """)
 
-        count_sch = conn.execute("SELECT COUNT(*) FROM official_schedules").fetchone()[0]
-        if count_sch == 0:
-            sample_schs = [
-                ("SCH_001", "Mentoring Chấm CP2", "2026-07-30T17:00:00", "2026-07-30T18:00:00", 1, "MENTORING", "Coach Hùng", "Discord Voice 1", "active", "msg_9821", "lich-hoc-moi", "2026-07-30T09:30:00", "2026-07-30T09:30:00"),
-                ("SCH_002", "Học Online Live - ReAct Engine", "2026-07-31T14:00:00", "2026-07-31T16:30:00", 1, "CLASS", "Giảng viên Tín", "Zoom Class", "active", "msg_9844", "thong-bao-chung", "2026-07-29T09:00:00", "2026-07-29T09:00:00"),
-                ("SCH_003", "Hạn nộp Spec.md (CP4)", "2026-07-30T23:59:00", "2026-07-30T23:59:00", 1, "DEADLINE", "BTC", "Git Repo", "active", "msg_9890", "thong-bao-chung", "2026-07-30T11:00:00", "2026-07-30T11:00:00"),
-                ("SCH_004", "Workshop Prompting Nâng Cao", "2026-08-01T09:30:00", "2026-08-01T11:30:00", 0, "WORKSHOP", "Coach Quân", "Voice 2", "canceled", "msg_9950", "lich-hoc-moi", "2026-07-30T14:15:00", "2026-07-30T14:15:00"),
-                ("SCH_005", "Module 4 - Agentic RAG", "2026-08-03T09:00:00", "2026-08-03T11:30:00", 1, "CLASS", "Giảng viên Tín", "Zoom Class", "active", "msg_10010", "thong-bao-chung", "2026-07-28T14:00:00", "2026-07-28T14:00:00"),
-                ("SCH_006", "Hạn nộp Đồ án Capstone Proposal", "2026-08-15T23:59:00", "2026-08-15T23:59:00", 1, "DEADLINE", "Hội Đồng Capstone", "Git Repo", "active", "msg_10100", "thong-bao-chung", "2026-07-25T10:00:00", "2026-07-25T10:00:00"),
-                ("SCH_007", "Demo Day & Bế Mạc Capstone", "2026-08-28T18:00:00", "2026-08-28T21:00:00", 1, "EVENT", "BTC Hackathon", "Discord Stage & Offline", "active", "msg_10200", "thong-bao-chung", "2026-07-20T15:00:00", "2026-07-20T15:00:00"),
-                ("SCH_008", "Slot 1-on-1 Code Review & Fix Bug", "2026-08-05T15:00:00", "2026-08-05T16:30:00", 0, "MENTORING", "Coach Hùng", "Voice 3", "active", "msg_10025", "lich-hoc-moi", "2026-07-29T16:00:00", "2026-07-29T16:00:00"),
-            ]
-            conn.executemany("INSERT INTO official_schedules VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", sample_schs)
+
+def try_claim(lock_key: str) -> bool:
+    """Cố gắng 'giành quyền' xử lý 1 việc chỉ-làm-một-lần, định danh bởi `lock_key`.
+
+    Trả về True nếu ĐÂY LÀ LẦN ĐẦU claim (nơi gọi được phép tiếp tục xử lý).
+    Trả về False nếu key đã được claim trước đó (nơi gọi PHẢI bỏ qua, tránh làm trùng
+    việc — vd. gọi LLM trích xuất lịch 2 lần, hoặc gửi 2 embed trả lời cho cùng 1 câu hỏi).
+
+    An toàn khi nhiều tiến trình cùng dùng chung 1 file SQLite: INSERT vào PRIMARY KEY
+    trùng sẽ ném IntegrityError, ta bắt lỗi đó và coi là "thua cuộc giành khoá".
+    """
+    with get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO idempotency_locks (lock_key, created_at) VALUES (?, ?)",
+                (lock_key, now_iso()),
+            )
+            return True
+        except sqlite3.IntegrityError:
+            return False
 
 
 def upsert_message(msg_id, channel, sender, sender_role, content, created_at=None, is_edited=False):
@@ -160,7 +196,7 @@ def upsert_message(msg_id, channel, sender, sender_role, content, created_at=Non
 def get_message(msg_id):
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM messages WHERE msg_id=?", (msg_id,)).fetchone()
-        return dict(row) if row else None
+        return _with_trust(row) if row else None
 
 
 def list_messages(channel: str, limit: int = 50):
@@ -169,42 +205,97 @@ def list_messages(channel: str, limit: int = 50):
             "SELECT * FROM messages WHERE channel=? ORDER BY created_at ASC LIMIT ?",
             (channel, limit),
         ).fetchall()
-        return [dict(r) for r in rows]
+        return [_with_trust(r) for r in rows]
 
 
-def search_messages(keyword: str, channel: str = None, limit: int = 10):
-    q = "SELECT * FROM messages WHERE content LIKE ?"
-    params = [f"%{keyword}%"]
+def search_messages(keyword: str, channel: str = None, limit: int = 20,
+                     sender_role: str = None, only_official: bool = None,
+                     date_from: str = None, date_to: str = None):
+    """Tìm tin nhắn thô theo từ khoá — gồm CẢ tin nhắn học viên, không chỉ thông báo.
+
+    Mỗi kết quả có field `is_official`: True = nguồn chính thức đáng tin,
+    False = tin nhắn học viên (chỉ là ngữ cảnh, KHÔNG phải sự thật về lịch).
+
+    only_official=True  -> chỉ nguồn chính thức
+    only_official=False -> chỉ tin nhắn không chính thức (dùng để xem học viên đang bàn gì)
+    only_official=None  -> cả hai (mặc định)
+    """
+    # Tách từ khoá thành các token và khớp OR, xếp hạng theo SỐ TOKEN khớp.
+    # Nếu khớp nguyên cụm như trước (`content LIKE '%cả cụm%'`) thì model hỏi
+    # "deadline nộp đồ án Capstone" sẽ KHÔNG tìm ra câu "deadline Capstone dời sang 20/8" —
+    # tức là gần như mọi câu hỏi tự nhiên đều trả về rỗng.
+    tokens = [t for t in (keyword or "").split() if len(t) > 1] or [keyword or ""]
+    like_terms = " OR ".join(["content LIKE ?"] * len(tokens))
+    score = " + ".join(["(CASE WHEN content LIKE ? THEN 1 ELSE 0 END)"] * len(tokens))
+    patterns = [f"%{t}%" for t in tokens]
+
+    q = f"SELECT *, ({score}) AS _score FROM messages WHERE ({like_terms})"
+    params = patterns + patterns          # thứ tự: SELECT score trước, rồi WHERE
     if channel:
         q += " AND channel=?"
         params.append(channel)
-    q += " ORDER BY created_at DESC LIMIT ?"
-    params.append(limit)
+    if sender_role:
+        q += " AND sender_role=?"
+        params.append(sender_role)
+    if date_from:
+        q += " AND created_at >= ?"
+        params.append(date_from)
+    if date_to:
+        q += " AND created_at <= ?"
+        params.append(date_to)
+    q += " ORDER BY _score DESC, created_at DESC LIMIT ?"
+    # Lọc is_official bằng Python (nó là giá trị suy ra, không phải cột) -> nới limit SQL
+    # để sau khi lọc vẫn còn đủ kết quả trả về.
+    params.append(limit if only_official is None else limit * 5)
     with get_conn() as conn:
-        rows = conn.execute(q, params).fetchall()
-        return [dict(r) for r in rows]
+        rows = [_with_trust(r) for r in conn.execute(q, params).fetchall()]
+    for r in rows:
+        r.pop("_score", None)
+    if only_official is not None:
+        rows = [r for r in rows if r["is_official"] is bool(only_official)]
+    return rows[:limit]
 
 
 def next_schedule_id():
+    """Sinh ID mới dựa trên SỐ LỚN NHẤT đang có trong `id` (SCH_014 -> SCH_015), KHÔNG dùng
+    COUNT(*) như trước đây. COUNT(*) từng gây lỗi 'UNIQUE constraint failed: official_schedules.id':
+    hễ có dòng nào bị xoá (vd. dọn lịch trùng do bug) thì count tụt xuống, sinh lại đúng 1 ID đã
+    tồn tại -> insert tiếp theo văng lỗi. Đếm theo MAX thì có xoá bao nhiêu dòng giữa chừng cũng
+    không bao giờ sinh trùng ID cũ."""
     with get_conn() as conn:
-        row = conn.execute("SELECT COUNT(*) AS c FROM official_schedules").fetchone()
-        return f"SCH_{row['c'] + 1:03d}"
+        rows = conn.execute("SELECT id FROM official_schedules").fetchall()
+    max_n = 0
+    for r in rows:
+        try:
+            max_n = max(max_n, int(str(r["id"]).rsplit("_", 1)[-1]))
+        except ValueError:
+            continue
+    return f"SCH_{max_n + 1:03d}"
 
 
 def create_schedule(title, start_time, end_time, is_mandatory, category, host, location,
                      source_msg_id, source_channel):
-    sched_id = next_schedule_id()
     ts = now_iso()
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO official_schedules
-               (id, title, start_time, end_time, is_mandatory, category, host, location,
-                status, source_msg_id, source_channel, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
-            (sched_id, title, start_time, end_time, int(is_mandatory), category, host, location,
-             source_msg_id, source_channel, ts, ts),
-        )
-    return get_schedule(sched_id)
+    # Retry vài lần nếu đụng ID trùng (vd. 2 lượt tạo lịch chạy gần như đồng thời cùng đọc
+    # được MAX cũ trước khi lượt kia kịp insert) — an toàn hơn là để văng lỗi ra ngoài.
+    last_err = None
+    for _ in range(5):
+        sched_id = next_schedule_id()
+        try:
+            with get_conn() as conn:
+                conn.execute(
+                    """INSERT INTO official_schedules
+                       (id, title, start_time, end_time, is_mandatory, category, host, location,
+                        status, source_msg_id, source_channel, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
+                    (sched_id, title, start_time, end_time, int(is_mandatory), category, host, location,
+                     source_msg_id, source_channel, ts, ts),
+                )
+            return get_schedule(sched_id)
+        except sqlite3.IntegrityError as e:
+            last_err = e
+            continue
+    raise RuntimeError(f"Không thể sinh ID lịch mới sau nhiều lần thử: {last_err}")
 
 
 def update_schedule(sched_id, source_msg_id, source_channel, **fields):
@@ -250,7 +341,11 @@ def query_schedules(date_from=None, date_to=None, category=None, status="active"
         q += " AND status=?"
         params.append(status)
     if date_from:
-        q += " AND end_time >= ?"
+        # end_time CÓ THỂ NULL (deadline chỉ có mốc bắt đầu). Trong SQLite `NULL >= x` ra
+        # NULL -> bị coi là false -> sự kiện đó biến mất khỏi MỌI query có date_from mà
+        # không báo lỗi. Đây từng làm "Hạn nộp Đồ án Capstone" không bao giờ tra được.
+        # Không có end_time thì lấy start_time làm mốc so sánh.
+        q += " AND COALESCE(end_time, start_time) >= ?"
         params.append(date_from)
     if date_to:
         q += " AND start_time <= ?"

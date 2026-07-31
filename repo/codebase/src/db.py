@@ -491,7 +491,7 @@ def list_active_schedules_for_matching(limit=30):
 
 
 def query_schedules(date_from=None, date_to=None, category=None, status="active", mandatory_only=None):
-    q = "SELECT * FROM official_schedules"
+    q = "SELECT * FROM official_schedules WHERE 1=1"
     params = []
     if status:
         q += " AND status=?"

@@ -167,6 +167,7 @@ async def backfill_channel(channel, limit, stats, extract: bool = False):
                     sender_role=sender_role,
                     content=content,
                     created_at=created_iso,
+                    channel_id=channel.id,
                 )
                 if res and res.get("extraction"):
                     stats["extracted"] = stats.get("extracted", 0) + 1

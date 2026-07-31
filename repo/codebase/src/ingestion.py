@@ -47,25 +47,29 @@ LONG_CONTENT_WARN_THRESHOLD = int(os.getenv("LONG_CONTENT_WARN_THRESHOLD", "500"
 MAX_EXTRACT_CONTENT_LENGTH = int(os.getenv("MAX_EXTRACT_CONTENT_LENGTH", "4000"))
 
 
-def _should_ingest(sender_role: str, channel: str) -> bool:
+def _should_ingest(sender_role: str, channel: str = None, channel_id: int = None) -> bool:
     """Có gọi Extraction Agent (LLM) để trích thành lịch chính thức không.
 
     Dùng chung định nghĩa với field `is_official` của bảng messages — xem
     `db.is_official_source()`. Tin nhắn KHÔNG đạt vẫn được lưu raw ở `upsert_message`
     bên dưới, chỉ là không được biến thành lịch chính thức.
+
+    Phải truyền `channel_id` (ID Discord) khi có — nếu chỉ truyền tên kênh vào
+    tham số channel_id của is_official_source thì int(tên) fail và filter
+    ANNOUNCEMENT_CHANNEL_IDS bị bỏ qua.
     """
-    return is_official_source(sender_role, channel)
+    return is_official_source(sender_role, channel_id=channel_id, channel_name=channel)
 
 
 def ingest_message(msg_id, channel, sender, sender_role, content, created_at=None,
-                    is_edited=False, reference_date=None):
+                    is_edited=False, reference_date=None, channel_id=None):
     """Điểm vào chính. Gọi hàm này mỗi khi có 1 tin nhắn mới/sửa từ Discord."""
     msg_id = normalize_msg_id(msg_id)
     msg = upsert_message(msg_id, channel, sender, sender_role, content, created_at, is_edited)
 
     result = {"message": msg, "extraction": None}
 
-    if not _should_ingest(sender_role, channel):
+    if not _should_ingest(sender_role, channel=channel, channel_id=channel_id):
         return result
 
     # --- Chặn trích xuất trùng lặp (chỗ khó gây ra lỗi "tạo trùng lịch" / "trả lời 2 lần") ---

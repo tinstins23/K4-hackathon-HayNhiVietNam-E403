@@ -46,6 +46,7 @@ class IngestRequest(BaseModel):
     content: str
     created_at: Optional[str] = None
     is_edited: bool = False
+    channel_id: Optional[int] = None
 
 
 class ChatRequest(BaseModel):
@@ -74,6 +75,7 @@ def ingest(req: IngestRequest):
             msg_id=req.msg_id, channel=req.channel, sender=req.sender,
             sender_role=req.sender_role, content=req.content,
             created_at=req.created_at, is_edited=req.is_edited,
+            channel_id=req.channel_id,
         )
     except RuntimeError as e:
         raise HTTPException(status_code=502, detail=str(e))

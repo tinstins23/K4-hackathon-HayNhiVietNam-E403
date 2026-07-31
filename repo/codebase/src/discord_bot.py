@@ -141,20 +141,34 @@ async def on_message(message):
 
     sender_role = resolve_sender_role(message.author, guild=message.guild)
 
-    # Nếu là tin nhắn mới ở kênh thông báo chính thức và gửi bởi Coach/Admin -> Tự động lưu vào DB
+    # Tin chính thức (Coach/Admin + kênh announcement) -> lưu messages + Extraction Agent
+    # ghi vào official_schedules (ingest_message đã upsert raw trước, rồi mới extract).
     if db.is_official_source(sender_role, channel_id=message.channel.id, channel_name=message.channel.name):
         content = message.content.strip()
         if content:
             try:
-                db.upsert_message(
+                result = await asyncio.to_thread(
+                    ingestion.ingest_message,
                     msg_id=f"msg_{message.id}",
                     channel=message.channel.name,
                     sender=message.author.display_name or message.author.name,
                     sender_role=sender_role,
                     content=content,
                     created_at=message.created_at.isoformat() if message.created_at else db.now_iso(),
+                    channel_id=message.channel.id,
                 )
-                print(f"📥 [Realtime Ingest DB] Đã tự động thêm tin nhắn #{message.id} từ {sender_role.upper()} ({message.author.display_name}) ở #{message.channel.name} vào DB")
+                extraction = result.get("extraction") if result else None
+                if extraction:
+                    print(
+                        f"📥 [Realtime Ingest] #{message.id} từ {sender_role.upper()} "
+                        f"({message.author.display_name}) @#{message.channel.name} "
+                        f"-> action={extraction.get('action')}"
+                    )
+                else:
+                    print(
+                        f"📥 [Realtime Ingest] #{message.id} đã lưu messages "
+                        f"(không trích lịch) từ {sender_role.upper()} @#{message.channel.name}"
+                    )
             except Exception as e:
                 print(f"⚠️ [Realtime Ingest Error] #{message.id}: {e}")
 
@@ -272,6 +286,7 @@ async def on_message_edit(before, after):
             sender_role=sender_role,
             content=after.content,
             is_edited=True,
+            channel_id=after.channel.id,
         )
         extraction = result.get("extraction")
         if extraction:

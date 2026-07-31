@@ -75,6 +75,27 @@ def _format_citation_line(guild, item: dict) -> str:
     return f"• {label} — {item.get('sender')} (#{item.get('channel')})\n"
 
 
+def _join_citation_lines(lines: list, limit: int = 1024) -> str:
+    """Ghép các dòng trích dẫn lại, đảm bảo KHÔNG BAO GIỜ cắt ngang giữa 1 dòng.
+
+    Discord giới hạn mỗi field embed 1024 ký tự. Trước đây code cắt bằng
+    `"".join(...)[:1024]`, tin nhắn nhiều lịch (vd. hỏi cả năm) sẽ bị cắt NGANG XƯƠNG 1 dòng
+    trích dẫn (vd. "...(#thông-" rồi mất luôn tin phía sau) và MẤT LUÔN các dòng phía sau mà
+    không có dấu hiệu gì báo còn thiếu — tưởng là đủ nhưng thật ra thiếu, sai hẳn với cam kết
+    trích dẫn 100% nguồn (spec.md §7). Giờ dừng lại đúng ở ranh giới dòng, và báo rõ còn bao
+    nhiêu nguồn nữa chưa hiển thị hết thay vì im lặng cắt.
+    """
+    out, used = [], 0
+    for i, line in enumerate(lines):
+        if used + len(line) > limit - 40:  # chừa chỗ cho dòng "... và N nguồn khác"
+            remaining = len(lines) - i
+            out.append(f"_... và {remaining} nguồn khác (đã cắt bớt để vừa khung Discord)_")
+            break
+        out.append(line)
+        used += len(line)
+    return "".join(out)
+
+
 def resolve_sender_role(author) -> str:
     """Suy vai trò người gửi. Ưu tiên ROLE THẬT của Discord server, tên hiển thị chỉ là
     phương án cuối — nếu chỉ tin vào tên thì học viên đổi nickname thành 'Coach ABC' là
@@ -192,6 +213,14 @@ async def on_message(message):
                 mode = res.get("mode", "llm")
                 is_offline = mode == "offline_regex"
 
+                # Log tool_trace ra console — không hiện cho học viên, chỉ để dev chẩn đoán khi
+                # câu trả lời có vẻ sai (vd. agent quên gọi query_schedules mà chỉ dựa vào
+                # search_messages). Không có log này thì rất khó biết agent đã "nghĩ" gì.
+                trace = res.get("tool_trace", [])
+                print(f"🔍 [Tool Trace] #{message.id} mode={mode} calls={len(trace)}")
+                for t in trace:
+                    print(f"    - {t.get('tool')}({t.get('args')}) -> {t.get('result_count')} kết quả")
+
                 # Màu + tiêu đề đổi theo mode để nhìn là biết ngay câu trả lời có phải do AI
                 # sinh ra không — không để chế độ offline trông giống hệt lượt AI thật.
                 embed = discord.Embed(
@@ -208,19 +237,18 @@ async def on_message(message):
                 if citations:
                     embed.add_field(
                         name="🔗 Trích dẫn nguồn sự thật",
-                        value="".join(
-                            _format_citation_line(message.guild, c) for c in citations
-                        )[:1024],
+                        value=_join_citation_lines(
+                            [_format_citation_line(message.guild, c) for c in citations]
+                        ),
                         inline=False,
                     )
 
                 if references:
+                    ref_lines = [_format_citation_line(message.guild, r) for r in references]
+                    ref_lines.append("_Đây là tin nhắn trong kênh chat, không phải thông báo chính thức._")
                     embed.add_field(
                         name="💬 Tin nhắn học viên liên quan (CHƯA XÁC THỰC)",
-                        value=(
-                            "".join(_format_citation_line(message.guild, r) for r in references)
-                            + "_Đây là tin nhắn trong kênh chat, không phải thông báo chính thức._"
-                        )[:1024],
+                        value=_join_citation_lines(ref_lines),
                         inline=False,
                     )
 

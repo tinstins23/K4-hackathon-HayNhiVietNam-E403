@@ -32,6 +32,21 @@ EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "google/gemini-2.0-flash-exp:fr
 # (event/target_id/action="ignore") khớp đúng với cách parse bên dưới, KHÔNG đổi sang schema
 # phẳng nếu chưa sửa lại `ingest_message()`, xem cảnh báo trong systemprompt.py.
 
+# Tin nhắn thông báo dài hơn ngưỡng này (ký tự) được coi là "khả năng cao gộp NHIỀU sự kiện
+# trong 1 tin" (vd. BTC dán nguyên lịch cả tuần vào 1 tin thay vì tách từng tin). Vì schema
+# JSON của Extraction Agent chỉ hỗ trợ TRẢ VỀ 1 sự kiện/lần gọi (xem EXTRACTION_SYSTEM_PROMPT),
+# tin dài dễ khiến model chỉ bắt được 1 sự kiện rồi bỏ sót phần còn lại MÀ KHÔNG BÁO LỖI GÌ.
+# Không có cách nào tự động "tách" an toàn (dễ cắt nhầm ngay giữa mốc thời gian quan trọng),
+# nên xử lý bằng cách: (1) vẫn gọi LLM trích xuất bình thường (prompt đã dặn ưu tiên sự kiện
+# rõ ràng nhất), (2) LUÔN log cảnh báo ra console để BTC/dev biết cần kiểm tra thủ công hoặc
+# tách lại thành nhiều tin riêng cho lần thông báo sau.
+LONG_CONTENT_WARN_THRESHOLD = int(os.getenv("LONG_CONTENT_WARN_THRESHOLD", "500"))
+
+# Giới hạn cứng số ký tự gửi cho LLM trích xuất — phòng trường hợp cực đoan (dán nguyên 1 tài
+# liệu dài vào tin nhắn) làm tốn vượt mức token/quota free-tier. KHÔNG cắt bớt bản lưu trong DB
+# (messages.content luôn giữ nguyên văn đầy đủ) — chỉ cắt phần gửi cho model.
+MAX_EXTRACT_CONTENT_LENGTH = int(os.getenv("MAX_EXTRACT_CONTENT_LENGTH", "4000"))
+
 
 def _should_ingest(sender_role: str, channel: str) -> bool:
     """Có gọi Extraction Agent (LLM) để trích thành lịch chính thức không.
@@ -70,13 +85,33 @@ def ingest_message(msg_id, channel, sender, sender_role, content, created_at=Non
     active_events = list_active_schedules_for_matching()
     ref_date = reference_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
+    content_len = len(content or "")
+    if content_len >= LONG_CONTENT_WARN_THRESHOLD:
+        # Cảnh báo sớm — không chặn, không tự "đoán" cách tách. Schema chỉ trả 1 sự kiện/lần
+        # gọi nên tin dài gộp nhiều mốc thời gian rất dễ bị bỏ sót mà im lặng không báo gì.
+        print(
+            f"⚠️ [Ingest Warning] #{msg_id}: tin nhắn dài {content_len} ký tự — có thể gộp NHIỀU "
+            f"sự kiện. Extraction Agent chỉ trích được 1 sự kiện/tin nhắn, kiểm tra thủ công "
+            f"official_schedules sau khi xử lý, hoặc nhờ người đăng tách lại thành các tin riêng."
+        )
+
+    extract_content = content
+    if content_len > MAX_EXTRACT_CONTENT_LENGTH:
+        # Chỉ cắt phần GỬI CHO LLM để chặn tốn quá nhiều token — bản lưu DB (messages.content,
+        # đã upsert phía trên) vẫn giữ nguyên văn đầy đủ, không mất dữ liệu gốc.
+        extract_content = content[:MAX_EXTRACT_CONTENT_LENGTH]
+        print(
+            f"⚠️ [Ingest Warning] #{msg_id}: đã cắt nội dung gửi LLM từ {content_len} xuống "
+            f"{MAX_EXTRACT_CONTENT_LENGTH} ký tự để tránh tốn quá nhiều token/quota."
+        )
+
     user_prompt = f"""CONTEXT:
 - Ngày hôm nay (reference_date): {ref_date}
 - Danh sách sự kiện đang active trong DB (để so khớp update/cancel):
 {json.dumps(active_events, ensure_ascii=False, indent=2)}
 
 TIN NHẮN CẦN TRÍCH XUẤT (từ {sender}, role={sender_role}, kênh #{channel}):
-\"\"\"{content}\"\"\"
+\"\"\"{extract_content}\"\"\"
 """
 
     message = chat_completion(

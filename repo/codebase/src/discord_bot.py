@@ -70,7 +70,9 @@ def _format_citation_line(guild, item: dict) -> str:
     """1 dòng trích dẫn trong embed — link hoá được thì link, không thì fallback text thường."""
     msg_id = item.get("msg_id", "")
     url = _jump_url(guild, item.get("channel"), msg_id)
-    label = f"[#{msg_id}]({url})" if url else f"**#{msg_id}**"
+    raw_id = str(msg_id).split("_", 1)[-1] if "_" in str(msg_id) else str(msg_id).lstrip("#")
+    display_id = raw_id if raw_id.isdigit() else msg_id.lstrip("#")
+    label = f"[#{display_id}]({url})" if url else f"**#{display_id}**"
     return f"• {label} — {item.get('sender')} (#{item.get('channel')})\n"
 
 
@@ -96,47 +98,28 @@ def _join_citation_lines(lines: list, limit: int = 1024) -> str:
 
 
 def resolve_sender_role(author, guild=None) -> str:
-    """Suy vai trò người gửi. Ưu tiên ROLE THẬT của Discord server, tên hiển thị là phương án cuối."""
-    role_mapping = {
-        "admin": "admin",
-        "btc": "admin",
-        "ban tổ chức": "admin",
-        "quản trị": "admin",
-        "coach": "coach",
-        "giảng viên": "coach",
-        "instructor": "coach",
-        "mentor": "coach",
-        "ta": "coach",
-    }
-
+    """Suy vai trò người gửi.
+    - Mặc định là 'student'.
+    - Nếu người dùng có Role trên Discord (khác @everyone), lấy vai trò theo tên Role đó trên Discord.
+    """
     member = author
     if guild and hasattr(guild, "get_member") and not getattr(author, "roles", None):
         found = guild.get_member(author.id)
         if found:
             member = found
 
-    # 1) Role thật trên server
-    for role in getattr(member, "roles", []):
-        rname = role.name.strip().lower()
-        mapped = role_mapping.get(rname)
-        if mapped:
-            return mapped
-        for k, v in role_mapping.items():
-            if k in rname:
-                return v
+    roles = [r for r in getattr(member, "roles", []) if not getattr(r, "is_default", lambda: False)() and r.name != "@everyone"]
+    if not roles:
+        return "student"
 
-    # 2) Fallback theo tên hiển thị (bao gồm tên các Coach: Tín, Thắng, Hùng, Quân)
-    display = (getattr(member, "display_name", "") or member.name).strip().lower()
-    coach_keywords = ["coach", "tín", "thắng", "hùng", "quân", "giảng viên", "instructor", "mentor", "t237", "t034"]
-    for kw in coach_keywords:
-        if kw in display:
-            return "coach"
-
-    for keyword, mapped in role_mapping.items():
-        if keyword in display:
-            return mapped
-
-    return "student"
+    # Lấy theo tên Role thực tế trên Discord
+    role_name = roles[0].name.strip().lower()
+    if any(k in role_name for k in ("admin", "btc", "ban tổ chức", "quản trị", "host")):
+        return "admin"
+    if any(k in role_name for k in ("coach", "giảng viên", "instructor", "mentor", "ta", "trợ giảng")):
+        return "coach"
+    
+    return role_name
 
 # Client Setup
 intents = discord.Intents.default()
@@ -298,6 +281,24 @@ async def on_message_edit(before, after):
             print(f"💬 [Ingest Edit] Đã cập nhật nội dung tin nhắn trong DB (không trích lịch)")
     except Exception as e:
         print(f"⚠️ [Ingest Edit Error] #{after.id}: {e}")
+
+# 4. KHI GIẢNG VIÊN/COACH XÓA BÀI ĐĂNG -> TỰ ĐỘNG XÓA TIN NHẮN TRONG DB VÀ HỦY LỊCH LIÊN QUAN
+@bot.event
+async def on_raw_message_delete(payload):
+    msg_id = f"msg_{payload.message_id}"
+    print(f"🗑️ [Message Delete] Đã phát hiện tin nhắn #{payload.message_id} bị xóa trên Discord...")
+    try:
+        res = await asyncio.to_thread(db.delete_message, msg_id)
+        deleted_count = res.get("deleted_count", 0)
+        canceled_ids = res.get("canceled_schedules", [])
+        if canceled_ids:
+            print(f"✅ [Message Delete] Đã xóa tin nhắn #{payload.message_id} khỏi DB ({deleted_count} tin) và tự động hủy {len(canceled_ids)} lịch: {canceled_ids}")
+        elif deleted_count > 0:
+            print(f"✅ [Message Delete] Đã xóa tin nhắn #{payload.message_id} khỏi CSDL bảng messages (không có lịch active).")
+        else:
+            print(f"ℹ️ [Message Delete] Tin nhắn #{payload.message_id} không tìm thấy trong DB.")
+    except Exception as e:
+        print(f"⚠️ [Message Delete Error] #{payload.message_id}: {e}")
 
 if __name__ == "__main__":
     if not DISCORD_BOT_TOKEN:

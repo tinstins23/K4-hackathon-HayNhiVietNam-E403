@@ -20,12 +20,12 @@ import hashlib
 from db import (
     upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS, is_official_source,
     list_active_schedules_for_matching, create_schedule, update_schedule, cancel_schedule,
-    try_claim, vn_now,
+    try_claim, vn_now, normalize_msg_id,
 )
 from systemprompt import EXTRACTION_SYSTEM_PROMPT
 from openrouter_client import chat_completion, parse_json_content
 
-EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "google/gemini-2.0-flash-exp:free")
+EXTRACTION_MODEL = os.getenv("EXTRACTION_MODEL", "google/gemma-4-26b-a4b-it:free")
 
 # EXTRACTION_SYSTEM_PROMPT giờ sống ở systemprompt.py (import ở đầu file) — schema LỒNG NHAU
 # (event/target_id/action="ignore") khớp đúng với cách parse bên dưới, KHÔNG đổi sang schema
@@ -60,6 +60,7 @@ def _should_ingest(sender_role: str, channel: str) -> bool:
 def ingest_message(msg_id, channel, sender, sender_role, content, created_at=None,
                     is_edited=False, reference_date=None):
     """Điểm vào chính. Gọi hàm này mỗi khi có 1 tin nhắn mới/sửa từ Discord."""
+    msg_id = normalize_msg_id(msg_id)
     msg = upsert_message(msg_id, channel, sender, sender_role, content, created_at, is_edited)
 
     result = {"message": msg, "extraction": None}
@@ -140,6 +141,7 @@ TIN NHẮN CẦN TRÍCH XUẤT (từ {sender}, role={sender_role}, kênh #{chann
             category=event.get("category", "EVENT"),
             host=event.get("host"),
             location=event.get("location"),
+            status=event.get("status", "active"),
             source_msg_id=msg_id,
             source_channel=channel,
         )

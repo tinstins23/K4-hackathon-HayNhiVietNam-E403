@@ -22,6 +22,16 @@ CODEBASE_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "co
 if CODEBASE_SRC not in sys.path:
     sys.path.insert(0, CODEBASE_SRC)
 
+try:
+    from dotenv import load_dotenv
+    _eval_dir = os.path.dirname(os.path.abspath(__file__))
+    _repo_dir = os.path.abspath(os.path.join(_eval_dir, ".."))
+    load_dotenv(os.path.join(_repo_dir, "codebase", ".env"))
+    load_dotenv(os.path.join(_repo_dir, ".env"))
+    load_dotenv()
+except ImportError:
+    pass
+
 import db
 import agent
 

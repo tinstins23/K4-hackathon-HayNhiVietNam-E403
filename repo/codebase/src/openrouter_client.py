@@ -8,6 +8,16 @@ import json
 import time
 import httpx
 
+try:
+    from dotenv import load_dotenv
+    _src_dir = os.path.dirname(os.path.abspath(__file__))
+    _repo_dir = os.path.abspath(os.path.join(_src_dir, ".."))
+    load_dotenv(os.path.join(_repo_dir, ".env"))
+    load_dotenv(os.path.join(_src_dir, ".env"))
+    load_dotenv()
+except ImportError:
+    pass
+
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # 429 = rate limit (hay gặp với model :free), 5xx = provider lỗi tạm thời
@@ -27,7 +37,7 @@ def _api_key():
 
 
 def chat_completion(messages, model, tools=None, tool_choice=None,
-                      temperature=0.2, response_format=None, timeout=60):
+                      temperature=0.2, response_format=None, max_tokens=250, timeout=60):
     """Gọi 1 lượt chat completion. Trả về message object thô từ API
     (có thể chứa .content hoặc .tool_calls)."""
     headers = {
@@ -40,6 +50,7 @@ def chat_completion(messages, model, tools=None, tool_choice=None,
         "model": model,
         "messages": messages,
         "temperature": temperature,
+        "max_tokens": max_tokens,
     }
     if tools:
         payload["tools"] = tools

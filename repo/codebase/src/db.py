@@ -186,15 +186,19 @@ def init_db():
         """)
 
 
-def reset_db():
-    """Xoá sạch toàn bộ dữ liệu trong DB (messages, official_schedules, personal_busy_slots, idempotency_locks)
-    để nạp lại từ đầu (sync lại từ Discord), tránh lệch dữ liệu giữa các môi trường local."""
+def clear_db():
+    """Xoá sạch 100% dữ liệu trong DB về 0 (messages = 0, official_schedules = 0, personal_busy_slots = 0, idempotency_locks = 0)."""
     init_db()
     with get_conn() as conn:
         conn.execute("DELETE FROM official_schedules")
         conn.execute("DELETE FROM messages")
         conn.execute("DELETE FROM personal_busy_slots")
         conn.execute("DELETE FROM idempotency_locks")
+
+
+def reset_db():
+    """Xoá sạch toàn bộ dữ liệu trong DB về 0 (100% dữ liệu đến từ Discord)."""
+    clear_db()
 
 
 
@@ -219,27 +223,75 @@ def try_claim(lock_key: str) -> bool:
             return False
 
 
+def normalize_msg_id(msg_id: str) -> str:
+    """Chuẩn hoá msg_id: hỗ trợ cả dạng số Discord thô (1532621992203649024), có hoặc không có tiền tố 'msg_' hay dấu '#'."""
+    if not msg_id:
+        return ""
+    cleaned = str(msg_id).strip().lstrip("#")
+    if cleaned.startswith("msg_"):
+        return cleaned
+    if cleaned.isdigit():
+        return f"msg_{cleaned}"
+    return cleaned
+
+
+def get_msg_id_candidates(msg_id: str) -> list:
+    """Trả về danh sách các biến thể có thể có của msg_id (ví dụ: '1532621992203649024', 'msg_1532621992203649024', '#1532621992203649024')
+    để đảm bảo truy vấn CSDL luôn khớp 100% dù dữ liệu trong DB đang lưu dưới dạng thô hay dạng chuẩn hoá."""
+    if not msg_id:
+        return []
+    s = str(msg_id).strip().lstrip("#")
+    candidates = [str(msg_id).strip(), s]
+    if s.startswith("msg_"):
+        pure = s[4:]
+        if pure:
+            candidates.append(pure)
+    else:
+        candidates.append(f"msg_{s}")
+    
+    seen = set()
+    result = []
+    for c in candidates:
+        if c and c not in seen:
+            seen.add(c)
+            result.append(c)
+    return result
+
+
 def upsert_message(msg_id, channel, sender, sender_role, content, created_at=None, is_edited=False):
     created_at = created_at or now_iso()
+    norm_id = normalize_msg_id(msg_id)
+    cands = get_msg_id_candidates(msg_id)
+    placeholders = ",".join(["?"] * len(cands))
     with get_conn() as conn:
-        existing = conn.execute("SELECT msg_id FROM messages WHERE msg_id=?", (msg_id,)).fetchone()
+        existing = conn.execute(f"SELECT msg_id FROM messages WHERE msg_id IN ({placeholders})", cands).fetchone()
+        target_id = existing["msg_id"] if existing else norm_id
         if existing:
             conn.execute(
                 """UPDATE messages SET content=?, is_edited=1, edited_at=? WHERE msg_id=?""",
-                (content, now_iso(), msg_id),
+                (content, now_iso(), target_id),
             )
         else:
             conn.execute(
                 """INSERT INTO messages (msg_id, channel, sender, sender_role, content, created_at, is_edited, edited_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (msg_id, channel, sender, sender_role, content, created_at, int(is_edited), None),
+                (target_id, channel, sender, sender_role, content, created_at, int(is_edited), None),
             )
-    return get_message(msg_id)
+    return get_message(target_id)
 
 
 def get_message(msg_id):
+    if not msg_id:
+        return None
+    cands = get_msg_id_candidates(msg_id)
+    if not cands:
+        return None
+    placeholders = ",".join(["?"] * len(cands))
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM messages WHERE msg_id=?", (msg_id,)).fetchone()
+        row = conn.execute(
+            f"SELECT * FROM messages WHERE msg_id IN ({placeholders})",
+            cands
+        ).fetchone()
         return _with_trust(row) if row else None
 
 
@@ -255,26 +307,31 @@ def list_messages(channel: str, limit: int = 50):
 def search_messages(keyword: str, channel: str = None, limit: int = 20,
                      sender_role: str = None, only_official: bool = None,
                      date_from: str = None, date_to: str = None):
-    """Tìm tin nhắn thô theo từ khoá — gồm CẢ tin nhắn học viên, không chỉ thông báo.
+    """Tìm tin nhắn thô theo từ khoá — gồm CẢ tin nhắn học viên, không chỉ thông báo. Hỗ trợ tra cứu theo ID tin nhắn.
 
     Mỗi kết quả có field `is_official`: True = nguồn chính thức đáng tin,
     False = tin nhắn học viên (chỉ là ngữ cảnh, KHÔNG phải sự thật về lịch).
-
-    only_official=True  -> chỉ nguồn chính thức
-    only_official=False -> chỉ tin nhắn không chính thức (dùng để xem học viên đang bàn gì)
-    only_official=None  -> cả hai (mặc định)
     """
-    # Tách từ khoá thành các token và khớp OR, xếp hạng theo SỐ TOKEN khớp.
-    # Nếu khớp nguyên cụm như trước (`content LIKE '%cả cụm%'`) thì model hỏi
-    # "deadline nộp đồ án Capstone" sẽ KHÔNG tìm ra câu "deadline Capstone dời sang 20/8" —
-    # tức là gần như mọi câu hỏi tự nhiên đều trả về rỗng.
+    cands = get_msg_id_candidates(keyword)
     tokens = [t for t in (keyword or "").split() if len(t) > 1] or [keyword or ""]
-    like_terms = " OR ".join(["content LIKE ?"] * len(tokens))
-    score = " + ".join(["(CASE WHEN content LIKE ? THEN 1 ELSE 0 END)"] * len(tokens))
-    patterns = [f"%{t}%" for t in tokens]
-
+    
+    cand_conds = " OR ".join(["msg_id = ?"] * len(cands))
+    like_terms = " OR ".join(["(content LIKE ? OR msg_id LIKE ? OR msg_id = ?)"] * len(tokens))
+    if cand_conds:
+        like_terms = f"({like_terms}) OR ({cand_conds})"
+    
+    score = " + ".join(["(CASE WHEN content LIKE ? OR msg_id LIKE ? THEN 1 ELSE 0 END)"] * len(tokens))
+    
+    score_params = []
+    where_params = []
+    for t in tokens:
+        score_params.extend([f"%{t}%", f"%{t}%"])
+        where_params.extend([f"%{t}%", f"%{t}%", t])
+    where_params.extend(cands)
+    
     q = f"SELECT *, ({score}) AS _score FROM messages WHERE ({like_terms})"
-    params = patterns + patterns          # thứ tự: SELECT score trước, rồi WHERE
+    params = score_params + where_params
+
     if channel:
         q += " AND channel=?"
         params.append(channel)
@@ -288,9 +345,8 @@ def search_messages(keyword: str, channel: str = None, limit: int = 20,
         q += " AND created_at <= ?"
         params.append(date_to)
     q += " ORDER BY _score DESC, created_at DESC LIMIT ?"
-    # Lọc is_official bằng Python (nó là giá trị suy ra, không phải cột) -> nới limit SQL
-    # để sau khi lọc vẫn còn đủ kết quả trả về.
     params.append(limit if only_official is None else limit * 5)
+
     with get_conn() as conn:
         rows = [_with_trust(r) for r in conn.execute(q, params).fetchall()]
     for r in rows:
@@ -318,10 +374,8 @@ def next_schedule_id():
 
 
 def create_schedule(title, start_time, end_time, is_mandatory, category, host, location,
-                     source_msg_id, source_channel):
+                     source_msg_id, source_channel, status="active"):
     ts = now_iso()
-    # Retry vài lần nếu đụng ID trùng (vd. 2 lượt tạo lịch chạy gần như đồng thời cùng đọc
-    # được MAX cũ trước khi lượt kia kịp insert) — an toàn hơn là để văng lỗi ra ngoài.
     last_err = None
     for _ in range(5):
         sched_id = next_schedule_id()
@@ -331,9 +385,9 @@ def create_schedule(title, start_time, end_time, is_mandatory, category, host, l
                     """INSERT INTO official_schedules
                        (id, title, start_time, end_time, is_mandatory, category, host, location,
                         status, source_msg_id, source_channel, created_at, updated_at)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                     (sched_id, title, start_time, end_time, int(is_mandatory), category, host, location,
-                     source_msg_id, source_channel, ts, ts),
+                     status, source_msg_id, source_channel, ts, ts),
                 )
             return get_schedule(sched_id)
         except sqlite3.IntegrityError as e:
@@ -350,7 +404,7 @@ def update_schedule(sched_id, source_msg_id, source_channel, **fields):
             sets.append(f"{k}=?")
             params.append(v)
     sets += ["source_msg_id=?", "source_channel=?", "updated_at=?"]
-    params += [source_msg_id, source_channel, now_iso()]
+    params += [normalize_msg_id(source_msg_id), source_channel, now_iso()]
     params.append(sched_id)
     with get_conn() as conn:
         conn.execute(f"UPDATE official_schedules SET {', '.join(sets)} WHERE id=?", params)
@@ -359,6 +413,53 @@ def update_schedule(sched_id, source_msg_id, source_channel, **fields):
 
 def cancel_schedule(sched_id, source_msg_id, source_channel):
     return update_schedule(sched_id, source_msg_id, source_channel, status="canceled")
+
+
+def cancel_schedules_by_source_msg_id(source_msg_id: str) -> list:
+    """Khi tin nhắn thông báo bị xóa trên Discord -> Tự động chuyển tất cả lịch trích xuất từ tin nhắn đó sang status='canceled'."""
+    cands = get_msg_id_candidates(source_msg_id)
+    if not cands:
+        return []
+    placeholders = ",".join(["?"] * len(cands))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT id FROM official_schedules WHERE source_msg_id IN ({placeholders}) AND status='active'",
+            cands
+        ).fetchall()
+        canceled_ids = []
+        for r in rows:
+            conn.execute(
+                "UPDATE official_schedules SET status='canceled', updated_at=? WHERE id=?",
+                (now_iso(), r["id"])
+            )
+            canceled_ids.append(r["id"])
+        return canceled_ids
+
+
+def delete_message(msg_id: str) -> dict:
+    """Xóa tin nhắn thô khỏi bảng messages và chuyển các lịch liên quan sang status='canceled'."""
+    cands = get_msg_id_candidates(msg_id)
+    if not cands:
+        return {"deleted_count": 0, "canceled_schedules": []}
+    placeholders = ",".join(["?"] * len(cands))
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT id FROM official_schedules WHERE source_msg_id IN ({placeholders}) AND status='active'",
+            cands
+        ).fetchall()
+        canceled_ids = [r["id"] for r in rows]
+
+        conn.execute(
+            f"UPDATE official_schedules SET status='canceled', updated_at=? WHERE source_msg_id IN ({placeholders})",
+            [now_iso()] + cands
+        )
+
+        conn.execute("PRAGMA foreign_keys = OFF")
+        cursor = conn.execute(f"DELETE FROM messages WHERE msg_id IN ({placeholders})", cands)
+        deleted_count = cursor.rowcount
+        conn.execute("PRAGMA foreign_keys = ON")
+
+        return {"deleted_count": deleted_count, "canceled_schedules": canceled_ids}
 
 
 def get_schedule(sched_id):

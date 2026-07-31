@@ -1,4 +1,5 @@
 import os
+import asyncio
 
 # macOS: Python bản python.org không dùng CA store của hệ thống -> discord.py sẽ lỗi
 # CERTIFICATE_VERIFY_FAILED khi nối discord.com. Trỏ sang bundle của certifi TRƯỚC khi
@@ -44,6 +45,34 @@ ANNOUNCEMENT_CHANNEL_IDS = [int(c) for c in _parse_ids("ANNOUNCEMENT_CHANNEL_IDS
 # Tin nhắn ngắn hơn ngưỡng này (sau khi bỏ khoảng trắng) coi là nhiễu ("ok", "vâng", emoji)
 # -> không lưu, tránh làm loãng kết quả search_messages.
 MIN_CONTENT_LENGTH = int(os.getenv("MIN_CONTENT_LENGTH", "10"))
+
+
+def _jump_url(guild, channel_name: str, msg_id: str):
+    """Link nhảy thẳng tới đúng tin nhắn gốc trên Discord (bấm vào trích dẫn là nhảy tới
+    #channel + đúng tin nhắn đó), dùng định dạng chuẩn của Discord:
+    https://discord.com/channels/<guild_id>/<channel_id>/<message_id>
+
+    Chỉ trả về link khi `msg_id` là ID Discord THẬT (số nguyên) — msg_id lưu trong DB có dạng
+    "msg_<snowflake>". Data cũ/mẫu (vd. "msg_9801" từ seed_data.py) không phải snowflake thật,
+    cố tạo link cho loại đó sẽ ra link chết -> trả None, chỗ gọi tự fallback về text thường.
+    """
+    if not guild or not msg_id:
+        return None
+    raw_id = msg_id.split("_", 1)[-1] if "_" in msg_id else msg_id
+    if not raw_id.isdigit():
+        return None
+    channel = discord.utils.get(guild.text_channels, name=channel_name)
+    if not channel:
+        return None
+    return f"https://discord.com/channels/{guild.id}/{channel.id}/{raw_id}"
+
+
+def _format_citation_line(guild, item: dict) -> str:
+    """1 dòng trích dẫn trong embed — link hoá được thì link, không thì fallback text thường."""
+    msg_id = item.get("msg_id", "")
+    url = _jump_url(guild, item.get("channel"), msg_id)
+    label = f"[#{msg_id}]({url})" if url else f"**#{msg_id}**"
+    return f"• {label} — {item.get('sender')} (#{item.get('channel')})\n"
 
 
 def resolve_sender_role(author) -> str:
@@ -103,7 +132,17 @@ async def on_message(message):
     # Nhờ vậy bước này gần như miễn phí dù lưu toàn bộ kênh.
     if is_watched and len(message.content.strip()) >= MIN_CONTENT_LENGTH:
         try:
-            result = ingestion.ingest_message(
+            # asyncio.to_thread: ingest_message() gọi requests/httpx ĐỒNG BỘ (blocking) tới
+            # OpenRouter. Nếu await trực tiếp trong coroutine này, cuộc gọi mạng đó CHIẾM
+            # LUÔN event loop chính — event loop này còn phải lo gửi heartbeat cho Discord
+            # gateway. Model free hay chậm (hoặc bị 429 retry) block 20-30s+ -> heartbeat
+            # không gửi kịp -> Discord tự ngắt kết nối ("heartbeat blocked"), và mọi tin nhắn
+            # gửi tới trong lúc mất kết nối có thể KHÔNG BAO GIỜ tới được on_message (mất
+            # hẳn, không phải chỉ trễ) — đây là lý do 1 loạt tin nhắn thông báo test bị "biến
+            # mất" dù đã gửi. to_thread() đẩy phần blocking sang thread khác, event loop
+            # chính rảnh tay heartbeat bình thường trong lúc chờ.
+            result = await asyncio.to_thread(
+                ingestion.ingest_message,
                 msg_id=f"msg_{message.id}",
                 channel=message.channel.name,
                 sender=message.author.display_name or message.author.name,
@@ -136,8 +175,12 @@ async def on_message(message):
             
             ref_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
             try:
-                # Gọi ReAct LLM Agent
-                res = react_agent.ask(
+                # Gọi ReAct LLM Agent — cũng phải to_thread() vì lý do y hệt ở trên (blocking
+                # HTTP call trong coroutine sẽ treo heartbeat Discord). Vòng ReAct này có thể
+                # gọi OpenRouter NHIỀU lần (tối đa MAX_TURNS lượt tool-calling), càng dễ block
+                # lâu hơn khối ingest ở trên -> càng bắt buộc phải chạy trong thread riêng.
+                res = await asyncio.to_thread(
+                    react_agent.ask,
                     user_query=user_query,
                     reference_date=ref_date,
                     user_label=message.author.name
@@ -160,12 +203,13 @@ async def on_message(message):
 
                 # Hai field TÁCH BIỆT — không được gộp. Tin nhắn học viên không phải nguồn
                 # sự thật; dán chung nhãn là vi phạm chỗ khó ① trong spec.md §5.
+                # Link hoá trích dẫn khi có thể — bấm vào #msg_id là nhảy thẳng tới tin nhắn gốc
+                # trên Discord (xem _jump_url/_format_citation_line ở đầu file).
                 if citations:
                     embed.add_field(
                         name="🔗 Trích dẫn nguồn sự thật",
                         value="".join(
-                            f"• **#{c.get('msg_id')}** — {c.get('sender')} (#{c.get('channel')})\n"
-                            for c in citations
+                            _format_citation_line(message.guild, c) for c in citations
                         )[:1024],
                         inline=False,
                     )
@@ -174,10 +218,7 @@ async def on_message(message):
                     embed.add_field(
                         name="💬 Tin nhắn học viên liên quan (CHƯA XÁC THỰC)",
                         value=(
-                            "".join(
-                                f"• #{r.get('msg_id')} — {r.get('sender')} (#{r.get('channel')})\n"
-                                for r in references
-                            )
+                            "".join(_format_citation_line(message.guild, r) for r in references)
                             + "_Đây là tin nhắn trong kênh chat, không phải thông báo chính thức._"
                         )[:1024],
                         inline=False,
@@ -213,7 +254,9 @@ async def on_message_edit(before, after):
     sender_role = resolve_sender_role(after.author)
     print(f"✏️ [Ingest Edit] #{after.id} ({sender_role}) @#{after.channel.name}...")
     try:
-        result = ingestion.ingest_message(
+        # to_thread(): xem ghi chú trong on_message() — tránh block event loop/heartbeat.
+        result = await asyncio.to_thread(
+            ingestion.ingest_message,
             msg_id=f"msg_{after.id}",
             channel=after.channel.name,
             sender=after.author.display_name or after.author.name,

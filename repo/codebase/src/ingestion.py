@@ -62,6 +62,11 @@ Quy tắc:
 - "cancel": tin nhắn báo HỦY 1 sự kiện đã có trong danh sách active -> bắt buộc trả target_id đúng.
 - Không tự bịa thời gian nếu tin nhắn không nói rõ. Nếu không đủ thông tin bắt buộc (start_time) -> "ignore".
 - Ngày hiện tại (nếu tin nhắn dùng "hôm nay", "ngày mai", "thứ X tuần này") được cho trong phần CONTEXT.
+- MƠ HỒ NGÀY (rất quan trọng): nếu tin nhắn chỉ nói 1 thứ trong tuần (vd. "Thứ 2", "thứ 3 có họp")
+  mà KHÔNG có từ neo cụ thể đi kèm (vd. "tuần này", "tuần sau", "ngày mai", "ngày kia", hoặc 1 ngày
+  dương lịch rõ ràng như "03/08") thì KHÔNG được tự đoán đó là thứ gần nhất hay thứ tuần sau.
+  TUYỆT ĐỐI không suy luận "chắc là tuần này" hay "chắc là tuần sau" khi người gửi không nói rõ —
+  coi như start_time KHÔNG đủ tin cậy -> action="ignore". Thà bỏ sót còn hơn tạo lịch sai ngày.
 - is_mandatory=true khi: tin nhắn từ BTC/Giảng viên thông báo buổi học chính thức, kỳ thi, deadline nộp bài,
   khai mạc/bế mạc, hoặc dùng từ "BẮT BUỘC"/"LƯU Ý"/"bắt buộc tham dự". is_mandatory=false khi: workshop
   tự chọn, mentoring 1-on-1 đăng ký tự nguyện, hoặc tin nhắn ghi rõ "tự chọn"/"tuỳ chọn"/"không bắt buộc".

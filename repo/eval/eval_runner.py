@@ -38,7 +38,7 @@ CRITERIA_MAP = {
 
 def run_evaluation():
     # 1. Initialize DB & Seed Data
-    db.init_db()
+    seed_data.seed_deterministic_data()
 
     # 2. Load Golden Set
     with open(GOLDEN_SET_PATH, "r", encoding="utf-8") as f:

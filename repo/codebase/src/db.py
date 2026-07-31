@@ -139,6 +139,41 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sched_time ON official_schedules(start_time, end_time)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_msg_channel ON messages(channel, created_at)")
 
+        # Bảng khoá idempotency dùng CHUNG file DB (schedules.db) làm điểm điều phối giữa
+        # NHIỀU tiến trình (vd. lỡ chạy 2 instance discord_bot.py, hoặc chạy backfill_discord.py
+        # trong lúc bot live vẫn đang chạy). Khi 1 sự kiện Discord (msg_id) bị xử lý > 1 lần,
+        # INSERT thứ 2 sẽ đụng PRIMARY KEY và thất bại -> try_claim() trả về False -> nơi gọi
+        # biết là "đã có người xử lý rồi" và tự bỏ qua. Đây là gốc rễ sửa lỗi "trả lời 2 lần" /
+        # "tạo trùng lịch": bug không nằm ở 1 hàm cụ thể mà ở việc ingest_message()/on_message
+        # trước đây có thể bị gọi nhiều lần cho CÙNG 1 tin nhắn mà không hàm nào tự biết điều đó.
+        conn.execute("""
+        CREATE TABLE IF NOT EXISTS idempotency_locks (
+            lock_key TEXT PRIMARY KEY,
+            created_at TEXT NOT NULL
+        )
+        """)
+
+
+def try_claim(lock_key: str) -> bool:
+    """Cố gắng 'giành quyền' xử lý 1 việc chỉ-làm-một-lần, định danh bởi `lock_key`.
+
+    Trả về True nếu ĐÂY LÀ LẦN ĐẦU claim (nơi gọi được phép tiếp tục xử lý).
+    Trả về False nếu key đã được claim trước đó (nơi gọi PHẢI bỏ qua, tránh làm trùng
+    việc — vd. gọi LLM trích xuất lịch 2 lần, hoặc gửi 2 embed trả lời cho cùng 1 câu hỏi).
+
+    An toàn khi nhiều tiến trình cùng dùng chung 1 file SQLite: INSERT vào PRIMARY KEY
+    trùng sẽ ném IntegrityError, ta bắt lỗi đó và coi là "thua cuộc giành khoá".
+    """
+    with get_conn() as conn:
+        try:
+            conn.execute(
+                "INSERT INTO idempotency_locks (lock_key, created_at) VALUES (?, ?)",
+                (lock_key, now_iso()),
+            )
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
 
 def upsert_message(msg_id, channel, sender, sender_role, content, created_at=None, is_edited=False):
     created_at = created_at or now_iso()
@@ -222,25 +257,45 @@ def search_messages(keyword: str, channel: str = None, limit: int = 20,
 
 
 def next_schedule_id():
+    """Sinh ID mới dựa trên SỐ LỚN NHẤT đang có trong `id` (SCH_014 -> SCH_015), KHÔNG dùng
+    COUNT(*) như trước đây. COUNT(*) từng gây lỗi 'UNIQUE constraint failed: official_schedules.id':
+    hễ có dòng nào bị xoá (vd. dọn lịch trùng do bug) thì count tụt xuống, sinh lại đúng 1 ID đã
+    tồn tại -> insert tiếp theo văng lỗi. Đếm theo MAX thì có xoá bao nhiêu dòng giữa chừng cũng
+    không bao giờ sinh trùng ID cũ."""
     with get_conn() as conn:
-        row = conn.execute("SELECT COUNT(*) AS c FROM official_schedules").fetchone()
-        return f"SCH_{row['c'] + 1:03d}"
+        rows = conn.execute("SELECT id FROM official_schedules").fetchall()
+    max_n = 0
+    for r in rows:
+        try:
+            max_n = max(max_n, int(str(r["id"]).rsplit("_", 1)[-1]))
+        except ValueError:
+            continue
+    return f"SCH_{max_n + 1:03d}"
 
 
 def create_schedule(title, start_time, end_time, is_mandatory, category, host, location,
                      source_msg_id, source_channel):
-    sched_id = next_schedule_id()
     ts = now_iso()
-    with get_conn() as conn:
-        conn.execute(
-            """INSERT INTO official_schedules
-               (id, title, start_time, end_time, is_mandatory, category, host, location,
-                status, source_msg_id, source_channel, created_at, updated_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
-            (sched_id, title, start_time, end_time, int(is_mandatory), category, host, location,
-             source_msg_id, source_channel, ts, ts),
-        )
-    return get_schedule(sched_id)
+    # Retry vài lần nếu đụng ID trùng (vd. 2 lượt tạo lịch chạy gần như đồng thời cùng đọc
+    # được MAX cũ trước khi lượt kia kịp insert) — an toàn hơn là để văng lỗi ra ngoài.
+    last_err = None
+    for _ in range(5):
+        sched_id = next_schedule_id()
+        try:
+            with get_conn() as conn:
+                conn.execute(
+                    """INSERT INTO official_schedules
+                       (id, title, start_time, end_time, is_mandatory, category, host, location,
+                        status, source_msg_id, source_channel, created_at, updated_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)""",
+                    (sched_id, title, start_time, end_time, int(is_mandatory), category, host, location,
+                     source_msg_id, source_channel, ts, ts),
+                )
+            return get_schedule(sched_id)
+        except sqlite3.IntegrityError as e:
+            last_err = e
+            continue
+    raise RuntimeError(f"Không thể sinh ID lịch mới sau nhiều lần thử: {last_err}")
 
 
 def update_schedule(sched_id, source_msg_id, source_channel, **fields):

@@ -16,9 +16,12 @@ import os
 import json
 from datetime import datetime, timezone
 
+import hashlib
+
 from db import (
     upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS, is_official_source,
     list_active_schedules_for_matching, create_schedule, update_schedule, cancel_schedule,
+    try_claim,
 )
 from openrouter_client import chat_completion, parse_json_content
 
@@ -85,6 +88,20 @@ def ingest_message(msg_id, channel, sender, sender_role, content, created_at=Non
     result = {"message": msg, "extraction": None}
 
     if not _should_ingest(sender_role, channel):
+        return result
+
+    # --- Chặn trích xuất trùng lặp (chỗ khó gây ra lỗi "tạo trùng lịch" / "trả lời 2 lần") ---
+    # ingest_message() có thể bị gọi > 1 lần cho CÙNG 1 msg_id nếu: lỡ chạy 2 tiến trình
+    # discord_bot.py cùng lúc, chạy backfill_discord.py trong lúc bot live vẫn đang chạy,
+    # hoặc Discord gateway lặp lại sự kiện. Không có khoá này thì mỗi lần gọi lại sẽ tốn
+    # thêm 1 lời gọi LLM VÀ tạo thêm 1 dòng official_schedules trùng lặp (đã từng xảy ra:
+    # SCH_012/SCH_013 và SCH_014/SCH_015 trùng y hệt nhau, cách nhau 1 giây).
+    # Tin nhắn MỚI: khoá theo msg_id, chỉ trích xuất 1 lần duy nhất trong vòng đời tin nhắn.
+    # Tin nhắn EDIT: khoá theo msg_id + hash nội dung, để 1 lượt sửa chỉ trích xuất 1 lần,
+    # nhưng NHIỀU lượt sửa khác nhau (nội dung khác nhau) vẫn được trích xuất lại như thiết kế.
+    content_hash = hashlib.sha256((content or "").encode("utf-8")).hexdigest()[:16]
+    lock_key = f"extract:{msg_id}:{content_hash}" if is_edited else f"extract:{msg_id}"
+    if not try_claim(lock_key):
         return result
 
     active_events = list_active_schedules_for_matching()

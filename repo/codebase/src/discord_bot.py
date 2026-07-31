@@ -122,6 +122,14 @@ async def on_message(message):
 
     # 2. XỬ LÝ CÂU HỎI HỌC VIÊN QUA REACT AGENT (LLM TOOL-CALLING)
     if bot.user.mentioned_in(message) or message.channel.name == "tro-ly-lich-trinh":
+        # Chặn trả lời trùng: nếu on_message bị gọi > 1 lần cho CÙNG 1 tin nhắn Discord
+        # (vd. lỡ chạy 2 tiến trình bot cùng token, cùng nghe 1 sự kiện) thì KHÔNG có gì
+        # trong 1 tiến trình đơn lẻ ngăn được tiến trình còn lại tự gửi embed riêng.
+        # Dùng chung file schedules.db làm điểm điều phối giữa các tiến trình: ai INSERT
+        # được khoá `reply:<message.id>` trước thì được trả lời, tiến trình/luồng còn lại
+        # thấy khoá đã bị giành thì tự bỏ qua, không gửi thêm embed thứ 2.
+        if not db.try_claim(f"reply:{message.id}"):
+            return
         async with message.channel.typing():
             user_query = message.content.replace(f'<@{bot.user.id}>', '').strip()
             print(f"❓ [ReAct LLM Agent] Nhận câu hỏi học viên: \"{user_query}\"")

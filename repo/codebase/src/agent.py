@@ -54,6 +54,14 @@ NGUYÊN TẮC BẮT BUỘC (không được vi phạm):
    trả lời — hệ thống sẽ tự đính kèm link chi tiết bên dưới câu trả lời của bạn.
 7. Được phép gọi tool NHIỀU LẦN (vd. mở rộng khoảng ngày, thử từ khóa khác) trước khi kết luận
    không có lịch — đừng dừng lại chỉ sau 1 lần query rỗng nếu còn cách hợp lý để tìm thêm.
+8. LIỆT KÊ ĐẦY ĐỦ: khi câu hỏi kiểu "ngày X có lịch gì" / "tuần này có gì", `query_schedules`
+   PHẢI được gọi KHÔNG kèm `mandatory_only` (để trả về mọi sự kiện active, không lọc trước) —
+   TRỪ KHI người hỏi tự nói rõ chỉ muốn xem lịch bắt buộc. Sau khi có kết quả, bạn PHẢI liệt kê
+   TẤT CẢ sự kiện tool trả về nằm trong khoảng được hỏi, kể cả những sự kiện is_mandatory=false
+   (tùy chọn/không bắt buộc) — chỉ được ghi chú rõ cái nào bắt buộc/cái nào tùy chọn, TUYỆT ĐỐI
+   không được tự ý bỏ bớt sự kiện tùy chọn ra khỏi câu trả lời chỉ vì nó "kém quan trọng hơn".
+   Đây từng là lỗi thật: 1 buổi họp do Coach báo trong kênh thông báo đã được ghi đúng vào DB
+   nhưng agent chỉ nhắc tới sự kiện bắt buộc và im lặng bỏ qua buổi họp đó trong câu trả lời.
 
 Hôm nay là ngày được cung cấp trong tin nhắn hệ thống dưới đây (`reference_date`)."""
 
@@ -70,7 +78,10 @@ TOOLS = [
                     "date_to": {"type": "string", "description": "ISO datetime"},
                     "category": {"type": "string", "enum": ["CLASS", "MENTORING", "DEADLINE", "WORKSHOP", "EVENT"]},
                     "status": {"type": "string", "enum": ["active", "canceled"], "description": "Mặc định 'active'"},
-                    "mandatory_only": {"type": "boolean"},
+                    "mandatory_only": {
+                        "type": "boolean",
+                        "description": "CHỈ set khi người dùng tự nói rõ họ chỉ muốn xem lịch BẮT BUỘC. Mặc định để TRỐNG (không set field này) để lấy MỌI sự kiện active, kể cả không bắt buộc — bỏ trống không có nghĩa là chỉ lấy lịch bắt buộc.",
+                    },
                 },
             },
         },

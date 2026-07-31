@@ -15,7 +15,6 @@ if not os.getenv("SSL_CERT_FILE"):
 
 import discord
 from discord.ext import commands
-from datetime import datetime, timezone
 
 # Load environment variables
 try:
@@ -194,7 +193,10 @@ async def on_message(message):
             user_query = message.content.replace(f'<@{bot.user.id}>', '').strip()
             print(f"❓ [ReAct LLM Agent] Nhận câu hỏi học viên: \"{user_query}\"")
             
-            ref_date = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+            # Dùng giờ VN (UTC+7), KHÔNG dùng UTC trực tiếp: nếu để UTC, khung 17:00-23:59 UTC
+            # (= 00:00-06:59 sáng hôm sau giờ VN) sẽ khiến "hôm nay" bị lùi mất 1 ngày so với
+            # thực tế người dùng đang sống — vd. 00:30 giờ VN ngày 01/08 lại bị tính là 31/07.
+            ref_date = db.vn_now().strftime("%Y-%m-%dT%H:%M:%S")
             try:
                 # Gọi ReAct LLM Agent — cũng phải to_thread() vì lý do y hệt ở trên (blocking
                 # HTTP call trong coroutine sẽ treo heartbeat Discord). Vòng ReAct này có thể

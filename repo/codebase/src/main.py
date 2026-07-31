@@ -13,7 +13,6 @@ Endpoints:
   GET  /health
 """
 import os
-from datetime import datetime, timezone
 from typing import Optional, List
 
 from dotenv import load_dotenv
@@ -83,7 +82,8 @@ def ingest(req: IngestRequest):
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    ref_date = req.reference_date or datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S")
+    # Giờ VN (UTC+7), không dùng UTC trực tiếp — xem ghi chú trong discord_bot.py/ingestion.py.
+    ref_date = req.reference_date or db.vn_now().strftime("%Y-%m-%dT%H:%M:%S")
     try:
         result = agent.ask(
             user_query=req.message, reference_date=ref_date,

@@ -77,24 +77,23 @@ def _format_citation_line(guild, item: dict) -> str:
 
 
 def _join_citation_lines(lines: list, limit: int = 1024) -> str:
-    """Ghép các dòng trích dẫn lại, đảm bảo KHÔNG BAO GIỜ cắt ngang giữa 1 dòng.
-
-    Discord giới hạn mỗi field embed 1024 ký tự. Trước đây code cắt bằng
-    `"".join(...)[:1024]`, tin nhắn nhiều lịch (vd. hỏi cả năm) sẽ bị cắt NGANG XƯƠNG 1 dòng
-    trích dẫn (vd. "...(#thông-" rồi mất luôn tin phía sau) và MẤT LUÔN các dòng phía sau mà
-    không có dấu hiệu gì báo còn thiếu — tưởng là đủ nhưng thật ra thiếu, sai hẳn với cam kết
-    trích dẫn 100% nguồn (spec.md §7). Giờ dừng lại đúng ở ranh giới dòng, và báo rõ còn bao
-    nhiêu nguồn nữa chưa hiển thị hết thay vì im lặng cắt.
-    """
+    """Ghép các dòng trích dẫn lại, đảm bảo không rỗng và không quá 1024 ký tự."""
+    if not lines:
+        return "• _(Không có thông tin trích dẫn)_"
+        
     out, used = [], 0
     for i, line in enumerate(lines):
-        if used + len(line) > limit - 40:  # chừa chỗ cho dòng "... và N nguồn khác"
+        if used + len(line) > limit - 50:
             remaining = len(lines) - i
-            out.append(f"_... và {remaining} nguồn khác (đã cắt bớt để vừa khung Discord)_")
+            out.append(f"\n_... và {remaining} nguồn khác_")
             break
         out.append(line)
         used += len(line)
-    return "".join(out)
+        
+    res = "".join(out).strip()
+    if not res:
+        res = "• _(Trích dẫn nguồn)_"
+    return res[:1024]
 
 
 def resolve_sender_role(author, guild=None) -> str:

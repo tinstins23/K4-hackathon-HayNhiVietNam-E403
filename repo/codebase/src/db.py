@@ -411,8 +411,19 @@ def update_schedule(sched_id, source_msg_id, source_channel, **fields):
     return get_schedule(sched_id)
 
 
-def cancel_schedule(sched_id, source_msg_id, source_channel):
-    return update_schedule(sched_id, source_msg_id, source_channel, status="canceled")
+def cancel_schedule(sched_id_or_title, source_msg_id, source_channel):
+    ts = now_iso()
+    with get_conn() as conn:
+        if str(sched_id_or_title).startswith("SCH_"):
+            conn.execute("UPDATE official_schedules SET status='canceled', source_msg_id=?, source_channel=?, updated_at=? WHERE id=?",
+                         (normalize_msg_id(source_msg_id), source_channel, ts, sched_id_or_title))
+            return get_schedule(sched_id_or_title)
+        else:
+            rows = conn.execute("SELECT id FROM official_schedules WHERE title LIKE ?", (f"%{sched_id_or_title}%",)).fetchall()
+            for r in rows:
+                conn.execute("UPDATE official_schedules SET status='canceled', source_msg_id=?, source_channel=?, updated_at=? WHERE id=?",
+                             (normalize_msg_id(source_msg_id), source_channel, ts, r["id"]))
+            return get_schedule(rows[0]["id"]) if rows else None
 
 
 def cancel_schedules_by_source_msg_id(source_msg_id: str) -> list:

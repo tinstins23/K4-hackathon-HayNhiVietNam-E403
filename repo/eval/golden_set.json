@@ -11,7 +11,8 @@
     ],
     "requires_citation": true,
     "expected_citations": [
-      "msg_1532613079265706034"
+      "msg_1532613079265706034",
+      "msg_1532652270087438336"
     ]
   },
   {
@@ -100,7 +101,8 @@
     "expected_contains": [],
     "requires_citation": true,
     "expected_citations": [
-      "msg_1532613079265706034"
+      "msg_1532613079265706034",
+      "msg_1532652270087438336"
     ]
   },
   {
@@ -148,7 +150,8 @@
     "requires_citation": true,
     "expected_citations": [
       "msg_1532611304190116051",
-      "msg_1532613079265706034"
+      "msg_1532613079265706034",
+      "msg_1532652270087438336"
     ]
   },
   {

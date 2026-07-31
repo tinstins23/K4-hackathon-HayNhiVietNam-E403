@@ -152,7 +152,9 @@ TIN NHẮN CẦN TRÍCH XUẤT (từ {sender}, role={sender_role}, kênh #{chann
             end_time=event.get("end_time"), is_mandatory=event.get("is_mandatory"),
             category=event.get("category"), host=event.get("host"), location=event.get("location"),
         )
-    elif action == "cancel" and target_id:
-        result["schedule"] = cancel_schedule(target_id, source_msg_id=msg_id, source_channel=channel)
+    elif action == "cancel":
+        target = target_id or (event.get("title") if event else None)
+        if target:
+            result["schedule"] = cancel_schedule(target, source_msg_id=msg_id, source_channel=channel)
 
     return result

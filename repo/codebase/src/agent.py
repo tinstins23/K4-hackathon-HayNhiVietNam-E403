@@ -19,7 +19,7 @@ xuất hiện trong kết quả các tool đã gọi ở lượt cuối, rồi t
 import os
 import json
 
-from db import query_schedules, search_messages, get_message, ROLE_PRIORITY
+from db import query_schedules, search_messages, get_message, ROLE_PRIORITY, to_vn_display
 import tools
 from openrouter_client import chat_completion
 
@@ -138,28 +138,50 @@ TOOLS = [
 ]
 
 
+_SYSTEM_TIME_KEYS = ("created_at", "updated_at", "edited_at")
+
+
+def _convert_display_times(data):
+    """DB lưu created_at/updated_at/edited_at theo UTC (đúng, không đổi ở tầng lưu trữ) —
+    nhưng model đọc các field này trực tiếp từ kết quả tool để KỂ LẠI cho người dùng (rule 6
+    trong systemprompt.py: narrate "ai nói lúc nào"). Nếu không quy đổi ở đây, model sẽ echo
+    nguyên giờ UTC -> lệch 7 tiếng so với giờ thực tế người dùng đăng (VD: đăng ~12h trưa VN
+    nhưng model nói "lúc 04:xx sáng"). KHÔNG đụng start_time/end_time (giờ sự kiện do
+    Extraction Agent parse từ ngôn ngữ tự nhiên, đã ngầm định là giờ VN, không có UTC gốc)."""
+    def convert(item):
+        if isinstance(item, dict):
+            for k in _SYSTEM_TIME_KEYS:
+                if item.get(k):
+                    item[k] = to_vn_display(item[k])
+        return item
+
+    if isinstance(data, list):
+        return [convert(x) for x in data]
+    return convert(data)
+
+
 def _execute_tool(name, args):
     if name == "query_schedules":
-        return query_schedules(
+        return _convert_display_times(query_schedules(
             date_from=args.get("date_from"), date_to=args.get("date_to"),
             category=args.get("category"), status=args.get("status", "active"),
             mandatory_only=args.get("mandatory_only"),
-        )
+        ))
     if name == "search_messages":
-        return search_messages(
+        return _convert_display_times(search_messages(
             args.get("keyword", ""), channel=args.get("channel"),
             only_official=args.get("only_official"), sender_role=args.get("sender_role"),
-        )
+        ))
     if name == "get_message":
         msg = get_message(args.get("msg_id"))
-        return msg or {"error": "not_found"}
+        return _convert_display_times(msg) if msg else {"error": "not_found"}
     if name == "get_schedule_by_id":
-        return tools.get_schedule_by_id(args.get("sched_id"))
+        return _convert_display_times(tools.get_schedule_by_id(args.get("sched_id")))
     if name == "list_busy_slots_from_db":
-        return tools.list_busy_slots_from_db(
+        return _convert_display_times(tools.list_busy_slots_from_db(
             user_label=args.get("user_label"),
             date_from=args.get("date_from"), date_to=args.get("date_to"),
-        )
+        ))
     if name == "add_personal_busy_slot":
         return tools.add_personal_busy_slot(
             user_label=args.get("user_label"), title=args.get("title"),
@@ -201,7 +223,10 @@ def _build_refs(msg_ids):
             refs.append({
                 "msg_id": m["msg_id"], "channel": m["channel"],
                 "sender": m["sender"], "sender_role": m["sender_role"],
-                "time": m["created_at"], "is_official": m["is_official"],
+                # DB lưu created_at theo UTC (đúng, không đổi) — nhưng LLM/người dùng đọc
+                # phải thấy giờ Việt Nam, nếu không sẽ lệch 7 tiếng (vd. đăng ~12h trưa VN
+                # lại hiện "04:xx sáng"). Xem db.to_vn_display().
+                "time": to_vn_display(m["created_at"]), "is_official": m["is_official"],
             })
     return refs
 

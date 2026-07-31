@@ -19,7 +19,7 @@ ROLE_PRIORITY: số càng cao càng đáng tin khi có xung đột thông tin.
 """
 import sqlite3
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from contextlib import contextmanager
 
 # DB_PATH mặc định neo theo vị trí file db.py này, KHÔNG theo cwd — nếu để tương đối thì
@@ -82,6 +82,33 @@ def _with_trust(row) -> dict:
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# --- Múi giờ Việt Nam (UTC+7, không có DST) ---
+# discord.py trả `message.created_at` ở UTC -> ta LƯU nguyên UTC vào DB (đúng, không đổi),
+# nhưng mọi chỗ TÍNH "hôm nay là ngày nào" hoặc HIỂN THỊ giờ cho người dùng/LLM đọc phải quy
+# đổi sang giờ Việt Nam, nếu không "hôm nay" có thể lệch 1 ngày (khung UTC 17:00-23:59 =
+# 00:00-06:59 giờ VN hôm sau) và giờ hiển thị trong trích dẫn sẽ lệch 7 tiếng so với thực tế
+# người dùng đăng (vd. đăng lúc ~11h55 sáng VN nhưng AI đọc thấy "04:55 sáng" trong DB).
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def vn_now() -> datetime:
+    return datetime.now(VN_TZ)
+
+
+def to_vn_display(iso_str: str) -> str:
+    """Chuyển 1 chuỗi ISO timestamp (mặc định coi là UTC nếu không có tzinfo) sang giờ VN,
+    dạng dễ đọc 'HH:MM DD/MM/YYYY' để đưa vào prompt LLM / hiển thị cho người dùng."""
+    if not iso_str:
+        return iso_str
+    try:
+        dt = datetime.fromisoformat(iso_str)
+    except ValueError:
+        return iso_str
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(VN_TZ).strftime("%H:%M %d/%m/%Y")
 
 
 @contextmanager

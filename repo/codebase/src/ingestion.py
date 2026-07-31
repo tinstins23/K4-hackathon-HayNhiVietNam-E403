@@ -14,14 +14,13 @@ kênh đó read-only) sẽ KHÔNG được ingest thành lịch chính thức ->
 """
 import os
 import json
-from datetime import datetime, timezone
 
 import hashlib
 
 from db import (
     upsert_message, ROLE_PRIORITY, OFFICIAL_CHANNELS, is_official_source,
     list_active_schedules_for_matching, create_schedule, update_schedule, cancel_schedule,
-    try_claim,
+    try_claim, vn_now,
 )
 from systemprompt import EXTRACTION_SYSTEM_PROMPT
 from openrouter_client import chat_completion, parse_json_content
@@ -83,7 +82,9 @@ def ingest_message(msg_id, channel, sender, sender_role, content, created_at=Non
         return result
 
     active_events = list_active_schedules_for_matching()
-    ref_date = reference_date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    # Giờ VN (UTC+7), không dùng UTC trực tiếp — xem ghi chú tương tự ở discord_bot.py:
+    # tránh "hôm nay" bị lùi 1 ngày trong khung 17:00-23:59 UTC (= 00:00-06:59 sáng giờ VN).
+    ref_date = reference_date or vn_now().strftime("%Y-%m-%d")
 
     content_len = len(content or "")
     if content_len >= LONG_CONTENT_WARN_THRESHOLD:

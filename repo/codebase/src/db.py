@@ -96,8 +96,47 @@ def init_db():
         )
         """)
 
+        # Tự động nâng cấp schema cho DB cũ nếu thiếu cột status hoặc updated_at
+        columns = [row[1] for row in conn.execute("PRAGMA table_info(official_schedules)").fetchall()]
+        if "status" not in columns:
+            conn.execute("ALTER TABLE official_schedules ADD COLUMN status TEXT DEFAULT 'active'")
+        if "updated_at" not in columns:
+            conn.execute("ALTER TABLE official_schedules ADD COLUMN updated_at TEXT DEFAULT ''")
+        if "source_channel" not in columns:
+            conn.execute("ALTER TABLE official_schedules ADD COLUMN source_channel TEXT DEFAULT ''")
+
         conn.execute("CREATE INDEX IF NOT EXISTS idx_sched_time ON official_schedules(start_time, end_time)")
         conn.execute("CREATE INDEX IF NOT EXISTS idx_msg_channel ON messages(channel, created_at)")
+
+        # Nạp sẵn messages & official_schedules mẫu nếu DB mới tạo
+        count_msg = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
+        if count_msg == 0:
+            sample_msgs = [
+                ("msg_9801", "thong-bao-chung", "BTC Hackathon", "btc", "KHAI MẠC HACKATHON BATCH 03: Phát đề bài CP1 (09:00 - 11:30 ngày 1).", "2026-07-28T08:00:00", 0, None),
+                ("msg_9844", "thong-bao-chung", "Giảng viên Tín", "instructor", "Buổi học Live chiều Thứ 4 (2026-07-31 14:00 - 16:30) học ReAct Engine.", "2026-07-29T09:00:00", 0, None),
+                ("msg_9890", "thong-bao-chung", "BTC Hackathon", "btc", "LƯU Ý HẠN NỘP BÀI CP4: Hạn cứng nộp file spec.md là 23:59 hôm nay (2026-07-30).", "2026-07-30T11:00:00", 0, None),
+                ("msg_10010", "thong-bao-chung", "Giảng viên Tín", "instructor", "LỊCH WEEK 2: Module 4 Agentic RAG (03/08 09:00-11:30). Hạn nộp Lab 4 23:59 T6 (07/08).", "2026-07-28T14:00:00", 0, None),
+                ("msg_10100", "thong-bao-chung", "Hội Đồng Chấm Capstone", "instructor", "Hạn chốt nộp Đề xuất Đồ án Capstone là 23:59 ngày 2026-08-15.", "2026-07-25T10:00:00", 0, None),
+                ("msg_10200", "thong-bao-chung", "BTC Hackathon", "btc", "LỄ BẾ MẠC & DEMO DAY CAPSTONE: 18:00 - 21:00 ngày 2026-08-28.", "2026-07-20T15:00:00", 0, None),
+                ("msg_9821", "lich-hoc-moi", "Coach Hùng", "coach", "THAY ĐỔI LỊCH MENTORING: Buổi Mentoring Chấm CP2 chiều nay diễn ra lúc 17:00 - 18:00 tại Discord Voice 1.", "2026-07-30T09:30:00", 0, None),
+                ("msg_9950", "lich-hoc-moi", "BTC Hackathon", "btc", "THÔNG BÁO HỦY LỊCH: Buổi Workshop Prompting Nâng Cao sáng Thứ 7 (2026-08-01 09:30-11:30) ĐÃ BỊ HỦY do bảo trì.", "2026-07-30T14:15:00", 0, None),
+                ("msg_10025", "lich-hoc-moi", "Coach Hùng", "coach", "LỊCH TUẦN 2: Slot 1-on-1 Code Review vào 15:00 - 16:30 Thứ 4 (2026-08-05) tại Voice 3.", "2026-07-29T16:00:00", 0, None),
+            ]
+            conn.executemany("INSERT INTO messages VALUES (?,?,?,?,?,?,?,?)", sample_msgs)
+
+        count_sch = conn.execute("SELECT COUNT(*) FROM official_schedules").fetchone()[0]
+        if count_sch == 0:
+            sample_schs = [
+                ("SCH_001", "Mentoring Chấm CP2", "2026-07-30T17:00:00", "2026-07-30T18:00:00", 1, "MENTORING", "Coach Hùng", "Discord Voice 1", "active", "msg_9821", "lich-hoc-moi", "2026-07-30T09:30:00", "2026-07-30T09:30:00"),
+                ("SCH_002", "Học Online Live - ReAct Engine", "2026-07-31T14:00:00", "2026-07-31T16:30:00", 1, "CLASS", "Giảng viên Tín", "Zoom Class", "active", "msg_9844", "thong-bao-chung", "2026-07-29T09:00:00", "2026-07-29T09:00:00"),
+                ("SCH_003", "Hạn nộp Spec.md (CP4)", "2026-07-30T23:59:00", "2026-07-30T23:59:00", 1, "DEADLINE", "BTC", "Git Repo", "active", "msg_9890", "thong-bao-chung", "2026-07-30T11:00:00", "2026-07-30T11:00:00"),
+                ("SCH_004", "Workshop Prompting Nâng Cao", "2026-08-01T09:30:00", "2026-08-01T11:30:00", 0, "WORKSHOP", "Coach Quân", "Voice 2", "canceled", "msg_9950", "lich-hoc-moi", "2026-07-30T14:15:00", "2026-07-30T14:15:00"),
+                ("SCH_005", "Module 4 - Agentic RAG", "2026-08-03T09:00:00", "2026-08-03T11:30:00", 1, "CLASS", "Giảng viên Tín", "Zoom Class", "active", "msg_10010", "thong-bao-chung", "2026-07-28T14:00:00", "2026-07-28T14:00:00"),
+                ("SCH_006", "Hạn nộp Đồ án Capstone Proposal", "2026-08-15T23:59:00", "2026-08-15T23:59:00", 1, "DEADLINE", "Hội Đồng Capstone", "Git Repo", "active", "msg_10100", "thong-bao-chung", "2026-07-25T10:00:00", "2026-07-25T10:00:00"),
+                ("SCH_007", "Demo Day & Bế Mạc Capstone", "2026-08-28T18:00:00", "2026-08-28T21:00:00", 1, "EVENT", "BTC Hackathon", "Discord Stage & Offline", "active", "msg_10200", "thong-bao-chung", "2026-07-20T15:00:00", "2026-07-20T15:00:00"),
+                ("SCH_008", "Slot 1-on-1 Code Review & Fix Bug", "2026-08-05T15:00:00", "2026-08-05T16:30:00", 0, "MENTORING", "Coach Hùng", "Voice 3", "active", "msg_10025", "lich-hoc-moi", "2026-07-29T16:00:00", "2026-07-29T16:00:00"),
+            ]
+            conn.executemany("INSERT INTO official_schedules VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)", sample_schs)
 
 
 def upsert_message(msg_id, channel, sender, sender_role, content, created_at=None, is_edited=False):

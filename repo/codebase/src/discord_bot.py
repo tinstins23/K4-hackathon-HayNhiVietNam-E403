@@ -24,7 +24,6 @@ except ImportError:
     pass
 
 import db
-import ingestion
 import agent as react_agent
 
 # --- CONFIGURATION FROM ENV ---
@@ -141,34 +140,25 @@ async def on_message(message):
 
     sender_role = resolve_sender_role(message.author, guild=message.guild)
 
-    # Tin chính thức (Coach/Admin + kênh announcement) -> lưu messages + Extraction Agent
-    # ghi vào official_schedules (ingest_message đã upsert raw trước, rồi mới extract).
+    # Tin chính thức (Coach/Admin + kênh announcement) -> chỉ lưu bảng messages.
+    # Agent trả lời bằng search_messages trên raw text — không extract sang bảng lịch.
     if db.is_official_source(sender_role, channel_id=message.channel.id, channel_name=message.channel.name):
         content = message.content.strip()
         if content:
             try:
-                result = await asyncio.to_thread(
-                    ingestion.ingest_message,
+                await asyncio.to_thread(
+                    db.upsert_message,
                     msg_id=f"msg_{message.id}",
                     channel=message.channel.name,
                     sender=message.author.display_name or message.author.name,
                     sender_role=sender_role,
                     content=content,
                     created_at=message.created_at.isoformat() if message.created_at else db.now_iso(),
-                    channel_id=message.channel.id,
                 )
-                extraction = result.get("extraction") if result else None
-                if extraction:
-                    print(
-                        f"📥 [Realtime Ingest] #{message.id} từ {sender_role.upper()} "
-                        f"({message.author.display_name}) @#{message.channel.name} "
-                        f"-> action={extraction.get('action')}"
-                    )
-                else:
-                    print(
-                        f"📥 [Realtime Ingest] #{message.id} đã lưu messages "
-                        f"(không trích lịch) từ {sender_role.upper()} @#{message.channel.name}"
-                    )
+                print(
+                    f"📥 [Realtime Ingest] #{message.id} từ {sender_role.upper()} "
+                    f"({message.author.display_name}) @#{message.channel.name}"
+                )
             except Exception as e:
                 print(f"⚠️ [Realtime Ingest Error] #{message.id}: {e}")
 
@@ -208,9 +198,7 @@ async def on_message(message):
                 mode = res.get("mode", "llm")
                 is_offline = mode == "offline_regex"
 
-                # Log tool_trace ra console — không hiện cho học viên, chỉ để dev chẩn đoán khi
-                # câu trả lời có vẻ sai (vd. agent quên gọi query_schedules mà chỉ dựa vào
-                # search_messages). Không có log này thì rất khó biết agent đã "nghĩ" gì.
+                # Log tool_trace ra console — không hiện cho học viên, chỉ để dev chẩn đoán.
                 trace = res.get("tool_trace", [])
                 print(f"🔍 [Tool Trace] #{message.id} mode={mode} calls={len(trace)}")
                 for t in trace:
@@ -248,8 +236,11 @@ async def on_message(message):
                     )
 
                 embed.set_footer(
-                    text=f"⚠️ Fallback regex — LLM lỗi: {res.get('llm_error','')[:80]}" if is_offline
-                         else f"Model: {react_agent.AGENT_MODEL} • OpenRouter ReAct Engine"
+                    text=(
+                        f"⚠️ LLM lỗi: {res.get('llm_error', '')[:120]}"
+                        if mode == "error" or is_offline
+                        else f"Model: {react_agent.AGENT_MODEL} • OpenRouter ReAct Engine"
+                    )
                 )
                 await message.channel.send(embed=embed)
                 
@@ -263,7 +254,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-# 3. KHI GIẢNG VIÊN EDIT BÀI ĐĂNG -> RE-INGEST BẰNG EXTRACTION AGENT
+# 3. EDIT BÀI ĐĂNG -> cập nhật nội dung trong bảng messages
 @bot.event
 async def on_message_edit(before, after):
     if after.author.bot:
@@ -272,31 +263,26 @@ async def on_message_edit(before, after):
     if not is_watched:
         return
 
-    # Dùng CHUNG hàm suy role với on_message — trước đây chỗ này hardcode "instructor",
-    # nghĩa là tin nhắn học viên sửa lại sẽ được nâng quyền thành nguồn chính thức.
     sender_role = resolve_sender_role(after.author)
+    if not db.is_official_source(sender_role, channel_id=after.channel.id, channel_name=after.channel.name):
+        return
+
     print(f"✏️ [Ingest Edit] #{after.id} ({sender_role}) @#{after.channel.name}...")
     try:
-        # to_thread(): xem ghi chú trong on_message() — tránh block event loop/heartbeat.
-        result = await asyncio.to_thread(
-            ingestion.ingest_message,
+        await asyncio.to_thread(
+            db.upsert_message,
             msg_id=f"msg_{after.id}",
             channel=after.channel.name,
             sender=after.author.display_name or after.author.name,
             sender_role=sender_role,
             content=after.content,
             is_edited=True,
-            channel_id=after.channel.id,
         )
-        extraction = result.get("extraction")
-        if extraction:
-            print(f"✅ [Ingest Edit] Đã ghi đè lịch theo bản sửa -> action={extraction.get('action')}")
-        else:
-            print(f"💬 [Ingest Edit] Đã cập nhật nội dung tin nhắn trong DB (không trích lịch)")
+        print(f"💬 [Ingest Edit] Đã cập nhật nội dung tin nhắn #{after.id} trong DB")
     except Exception as e:
         print(f"⚠️ [Ingest Edit Error] #{after.id}: {e}")
 
-# 4. KHI GIẢNG VIÊN/COACH XÓA BÀI ĐĂNG -> TỰ ĐỘNG XÓA TIN NHẮN TRONG DB VÀ HỦY LỊCH LIÊN QUAN
+# 4. XÓA BÀI ĐĂNG -> xóa tin trong bảng messages
 @bot.event
 async def on_raw_message_delete(payload):
     msg_id = f"msg_{payload.message_id}"
@@ -304,11 +290,8 @@ async def on_raw_message_delete(payload):
     try:
         res = await asyncio.to_thread(db.delete_message, msg_id)
         deleted_count = res.get("deleted_count", 0)
-        canceled_ids = res.get("canceled_schedules", [])
-        if canceled_ids:
-            print(f"✅ [Message Delete] Đã xóa tin nhắn #{payload.message_id} khỏi DB ({deleted_count} tin) và tự động hủy {len(canceled_ids)} lịch: {canceled_ids}")
-        elif deleted_count > 0:
-            print(f"✅ [Message Delete] Đã xóa tin nhắn #{payload.message_id} khỏi CSDL bảng messages (không có lịch active).")
+        if deleted_count > 0:
+            print(f"✅ [Message Delete] Đã xóa tin nhắn #{payload.message_id} khỏi DB.")
         else:
             print(f"ℹ️ [Message Delete] Tin nhắn #{payload.message_id} không tìm thấy trong DB.")
     except Exception as e:

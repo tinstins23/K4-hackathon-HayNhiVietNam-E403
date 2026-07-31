@@ -33,6 +33,12 @@ try:
 except ImportError:
     pass
 
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
 import db
 import ingestion
 
@@ -62,94 +68,84 @@ def show_stats():
         print(f"\n   Lịch active: {sched}\n")
 
 
-async def run_backfill(limit: int, extract: bool):
+async def run_backfill(limit: int, clear_first: bool = False, channel_ids: set = None):
     import discord  # noqa: PLC0415 — xem ghi chú ở đầu file
-    from discord_bot import WATCHED_CHANNEL_IDS, MIN_CONTENT_LENGTH, resolve_sender_role
+    from discord_bot import WATCHED_CHANNEL_IDS, resolve_sender_role
 
     intents = discord.Intents.default()
     intents.message_content = True
     client = discord.Client(intents=intents)
 
-    stats = {"saved": 0, "skipped": 0, "extracted": 0, "errors": 0}
+    stats = {"saved": 0, "skipped": 0, "errors": 0}
 
     @client.event
     async def on_ready():
         print(f"✅ Đã kết nối Discord với tên {client.user}")
         print(f"💾 Ghi vào: {db.DB_PATH}")
-        print(f"⚙️  limit={limit}/kênh · extract={'BẬT (tốn LLM)' if extract else 'TẮT (chỉ lưu raw)'}\n")
-        db.init_db()
+        if clear_first:
+            print("🧹 Đang thực hiện xoá sạch dữ liệu DB cũ (reset_db)...")
+            db.reset_db()
+        else:
+            db.init_db()
+
+        target_ids = channel_ids or db.OFFICIAL_CHANNEL_IDS or set(WATCHED_CHANNEL_IDS)
+        if target_ids:
+            print(f"⚙️  Lọc BẮT BUỘC theo Channel ID từ .env: {target_ids} · limit={limit}/kênh\n")
+        else:
+            print("⚠️  CHƯA CẤU HÌNH ANNOUNCEMENT_CHANNEL_IDS trong .env. Đang duyệt tất cả các kênh...")
 
         for guild in client.guilds:
             print(f"🏠 Server: {guild.name}")
             for channel in guild.text_channels:
-                if WATCHED_CHANNEL_IDS and channel.id not in WATCHED_CHANNEL_IDS:
+                # BẮT BUỘC LỌC THEO CHANNEL ID TỪ ENV
+                if target_ids and channel.id not in target_ids:
                     continue
                 try:
-                    count = await backfill_channel(channel, limit, extract, stats)
-                    print(f"   #{channel.name:<28} nạp {count} tin nhắn")
+                    count = await backfill_channel(channel, limit, stats)
+                    print(f"   #{channel.name} (ID: {channel.id}) -> nạp thành công {count} tin nhắn")
                 except discord.Forbidden:
-                    print(f"   #{channel.name:<28} ⛔ bot không có quyền đọc, bỏ qua")
+                    print(f"   #{channel.name} (ID: {channel.id}) -> ⛔ bot không có quyền đọc, bỏ qua")
                 except Exception as e:
-                    print(f"   #{channel.name:<28} ⚠️  {e}")
+                    print(f"   #{channel.name} (ID: {channel.id}) -> ⚠️ {e}")
                     stats["errors"] += 1
 
-        print(f"\n✅ Xong. Đã lưu {stats['saved']} · bỏ qua {stats['skipped']} (quá ngắn) "
-              f"· trích lịch {stats['extracted']} · lỗi {stats['errors']}")
-
-        if stats.get("no_roles"):
-            print(
-                f"\n⚠️  CẢNH BÁO: {stats['no_roles']}/{stats['saved']} tin nhắn KHÔNG đọc được role Discord\n"
-                "   -> tất cả bị gán 'student' -> không có nguồn chính thức -> KHÔNG trích được lịch.\n"
-                "   Nguyên nhân: chưa bật SERVER MEMBERS INTENT.\n"
-                "   Sửa: Discord Developer Portal -> Bot -> Privileged Gateway Intents\n"
-                "        -> bật SERVER MEMBERS INTENT -> chạy lại backfill."
-            )
+        print(f"\n✅ Xong! Đã nạp đầy đủ {stats['saved']} tin nhắn raw từ Coach/Admin vào DB (bỏ qua {stats['skipped']} tin, lỗi {stats['errors']}).")
         show_stats()
         await client.close()
 
     await client.start(DISCORD_BOT_TOKEN)
 
 
-async def backfill_channel(channel, limit, extract, stats):
-    from discord_bot import MIN_CONTENT_LENGTH, resolve_sender_role
+async def backfill_channel(channel, limit, stats):
+    from discord_bot import resolve_sender_role
 
     count = 0
     async for message in channel.history(limit=limit, oldest_first=True):
         if message.author.bot:
             continue
-        if len(message.content.strip()) < MIN_CONTENT_LENGTH:
+        
+        content = message.content.strip()
+        if not content:
             stats["skipped"] += 1
             continue
 
-        # Nếu chưa bật SERVER MEMBERS INTENT, history() trả về User (không có .roles)
-        # -> mọi người đều bị gán 'student' -> KHÔNG có nguồn chính thức nào -> không
-        # trích được lịch, mà cũng không có lỗi. Đếm lại để cảnh báo ở cuối.
-        if not getattr(message.author, "roles", None):
-            stats["no_roles"] = stats.get("no_roles", 0) + 1
+        # Suy đúng role (Admin, Coach, Student) cho người gửi
+        sender_role = resolve_sender_role(message.author, guild=channel.guild)
 
-        sender_role = resolve_sender_role(message.author)
+        # CHỈ LẤY TIN NHẮN TỪ COACH HOẶC ADMIN (BỎ QUA STUDENT)
+        if sender_role not in ("coach", "admin"):
+            stats["skipped"] += 1
+            continue
 
-        if extract:
-            result = ingestion.ingest_message(
-                msg_id=f"msg_{message.id}",
-                channel=channel.name,
-                sender=message.author.display_name or message.author.name,
-                sender_role=sender_role,
-                content=message.content,
-                created_at=message.created_at.isoformat(),
-            )
-            if result.get("extraction"):
-                stats["extracted"] += 1
-        else:
-            # Bỏ qua hoàn toàn Extraction Agent -> ghi thẳng vào bảng messages, 0 lời gọi LLM
-            db.upsert_message(
-                msg_id=f"msg_{message.id}",
-                channel=channel.name,
-                sender=message.author.display_name or message.author.name,
-                sender_role=sender_role,
-                content=message.content,
-                created_at=message.created_at.isoformat(),
-            )
+        # Lưu thẳng tin nhắn raw từ Coach/Admin vào SQLite DB, 0 lời gọi AI
+        db.upsert_message(
+            msg_id=f"msg_{message.id}",
+            channel=channel.name,
+            sender=message.author.display_name or message.author.name,
+            sender_role=sender_role,
+            content=content,
+            created_at=message.created_at.isoformat(),
+        )
 
         stats["saved"] += 1
         count += 1
@@ -157,12 +153,20 @@ async def backfill_channel(channel, limit, extract, stats):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Nạp lịch sử tin nhắn Discord vào DB")
-    parser.add_argument("--limit", type=int, default=500, help="Số tin nhắn mỗi kênh (mặc định 500)")
-    parser.add_argument("--no-extract", action="store_true",
-                        help="Chỉ lưu raw, KHÔNG gọi Extraction Agent (khuyến nghị cho lần chạy đầu)")
+    parser = argparse.ArgumentParser(description="Nạp lịch sử tin nhắn Discord vào DB (Không gọi AI, lọc theo Channel ID từ .env)")
+    parser.add_argument("--limit", type=int, default=500, help="Số tin nhắn tối đa mỗi kênh (mặc định 500)")
+    parser.add_argument("--channel-ids", type=str, default=None,
+                        help="Danh sách Channel IDs (phân cách dấu phẩy, ví dụ: 123456789,987654321). Mặc định lấy từ .env")
+    parser.add_argument("--clear", "--reset", action="store_true", help="Xoá sạch DB cũ trước khi nạp lại toàn bộ")
+    parser.add_argument("--clear-only", action="store_true", help="Chỉ xoá sạch DB về 0 rồi thoát")
     parser.add_argument("--stats", action="store_true", help="Chỉ in thống kê DB rồi thoát")
     args = parser.parse_args()
+
+    if args.clear_only:
+        db.reset_db()
+        print("🧹 Đã xoá sạch 100% dữ liệu trong DB (messages = 0, schedules = 0).")
+        show_stats()
+        sys.exit(0)
 
     if args.stats:
         show_stats()
@@ -172,4 +176,13 @@ if __name__ == "__main__":
         print("❌ Chưa có DISCORD_BOT_TOKEN. Điền vào repo/codebase/.env rồi chạy lại.")
         sys.exit(1)
 
-    asyncio.run(run_backfill(limit=args.limit, extract=not args.no_extract))
+    target_ids = {int(c.strip()) for c in args.channel_ids.split(",") if c.strip().isdigit()} if args.channel_ids else None
+
+    asyncio.run(run_backfill(
+        limit=args.limit,
+        clear_first=args.clear,
+        channel_ids=target_ids
+    ))
+
+
+

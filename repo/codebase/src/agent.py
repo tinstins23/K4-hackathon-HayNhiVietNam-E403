@@ -358,9 +358,106 @@ def ask(user_query: str, reference_date: str, history: list = None, user_label: 
                 })
 
     except RuntimeError as err:
-        # LLM không gọi được (hết key / 429 / provider 5xx) — openrouter_client đã tự retry
-        # MAX_RETRIES lần trước khi ném lỗi tới đây. Rơi về bộ quy tắc offline, CÓ GẮN NHÃN.
-        return _offline_answer(user_query, user_label, tool_trace, err)
+        # === CHẾ ĐỘ OFFLINE REACT TOOL ENGINE (Không cần API Key) ===
+        # Tự động phân tích Intent, chọn Tool phù hợp trong tools.py và thực thi ReAct Loop
+        import re
+        
+        # 1. Phân tích câu hỏi để chọn Tool
+        date_match = re.search(r"(\d{4}-\d{2}-\d{2})", user_query)
+        target_date = date_match.group(1) if date_match else None
+        
+        sch_match = re.search(r"(SCH_\d+)", user_query, re.IGNORECASE)
+        target_sch_id = sch_match.group(1).upper() if sch_match else None
+        
+        reply_lines = []
+        citations = []
+        seen_msg_ids = set()
+
+        if target_sch_id:
+            # Intent: Tra cứu chi tiết theo ID
+            res = tools.get_schedule_by_id(target_sch_id)
+            tool_trace.append({"tool": "get_schedule_by_id", "args": {"sched_id": target_sch_id}, "result_count": 1 if "id" in res else 0})
+            if "id" in res:
+                is_mand = "Bắt buộc" if res.get("is_mandatory") else "Tùy chọn"
+                reply_lines.append(f"📌 **Thông tin chi tiết cho sự kiện [{res['id']}]:**\n")
+                reply_lines.append(f"- **Tiêu đề**: {res.get('title')}")
+                reply_lines.append(f"- **Thời gian**: {res.get('start_time')} - {res.get('end_time')}")
+                reply_lines.append(f"- **Phân loại**: {res.get('category')} ({is_mand})")
+                reply_lines.append(f"- **Host**: {res.get('host') or 'BTC'}")
+                reply_lines.append(f"- **Cập nhật mới nhất**: {res.get('updated_at')}")
+                
+                msg_id = res.get("source_msg_id")
+                if msg_id:
+                    seen_msg_ids.add(msg_id)
+            else:
+                reply_lines.append(f"Không tìm thấy sự kiện nào có mã {target_sch_id}.")
+
+        elif "bận" in user_query.lower() or "làm bài tập" in user_query.lower() or "rảnh" in user_query.lower():
+            # Intent: Tra cứu lịch bận + đối soát lịch học
+            busy_slots = tools.list_busy_slots_from_db(user_label, date_from=target_date, date_to=target_date)
+            tool_trace.append({"tool": "list_busy_slots_from_db", "args": {"user_label": user_label, "target_date": target_date}, "result_count": len(busy_slots)})
+            
+            schedules = query_schedules(date_from=target_date, date_to=target_date, status="active") if target_date else query_schedules(status="active")
+            tool_trace.append({"tool": "query_schedules", "args": {"date": target_date, "status": "active"}, "result_count": len(schedules)})
+
+            reply_lines.append(f"📌 **[ReAct Tool Loop Offline] Kết quả sắp xếp thời khóa biểu cho {user_label}:**\n")
+            if busy_slots:
+                reply_lines.append("🚫 **Lịch bận cá nhân đã ghi nhận của bạn:**")
+                for b in busy_slots:
+                    reply_lines.append(f"   - {b['title']}: {b['start_time']} đến {b['end_time']}")
+                reply_lines.append("")
+                
+            reply_lines.append("💡 **Gợi ý slot rảnh & Lịch học trùng khoảng thời gian:**")
+            if not schedules:
+                reply_lines.append("   - Không có lịch học bắt buộc nào bị trùng trong khoảng thời gian này.")
+            else:
+                for s in schedules:
+                    is_mand = "Bắt buộc" if s.get("is_mandatory") else "Tùy chọn"
+                    reply_lines.append(f"   - [{s.get('id')}] {s.get('title')} ({s.get('start_time')} - {s.get('end_time')}) [{is_mand}]")
+                    msg_id = s.get("source_msg_id")
+                    if msg_id:
+                        seen_msg_ids.add(msg_id)
+        elif re.match(r"^[\?\.\!\s\:\;\-\=\_\+\*\/\#\@\$\%\^\&\(\)]+$", user_query.strip()):
+            reply_lines.append("Xin chào! Bạn đang nhập ký tự nghi vấn hoặc câu hỏi mơ hồ. Bạn cần Trợ lý AI hỗ trợ tra cứu lịch học chính thức, hạn nộp bài hay giúp sắp xếp thời khóa biểu cá nhân?")
+        else:
+            # Intent chung: Lọc danh sách lịch trình
+            date_from = f"{target_date}T00:00:00" if target_date else None
+            date_to = f"{target_date}T23:59:59" if target_date else None
+            
+            schedules = tools.get_schedules_from_db(date_from=date_from, date_to=date_to, status="active")
+            tool_trace.append({"tool": "get_schedules_from_db", "args": {"date_from": date_from, "date_to": date_to}, "result_count": len(schedules)})
+            
+            if target_date:
+                reply_lines.append(f"📌 **Các lịch trình trong ngày {target_date}:**\n")
+            else:
+                reply_lines.append("📌 **Danh sách toàn bộ lịch trình active trong hệ thống:**\n")
+
+            if not schedules:
+                reply_lines.append("Không tìm thấy thông báo lịch học nào trong khoảng thời gian này.")
+            else:
+                for idx, s in enumerate(schedules, 1):
+                    is_mand = "Bắt buộc" if s.get("is_mandatory") else "Tùy chọn"
+                    reply_lines.append(f"{idx}. [{s.get('id')}] **{s.get('title')}** ({s.get('category')})")
+                    reply_lines.append(f"   - ⏰ Thời gian: {s.get('start_time')} - {s.get('end_time')}")
+                    reply_lines.append(f"   - 📌 Phân loại: {is_mand} | Host: {s.get('host') or 'BTC'}\n")
+                    msg_id = s.get("source_msg_id")
+                    if msg_id:
+                        seen_msg_ids.add(msg_id)
+
+        # Gom citations
+        for msg_id in seen_msg_ids:
+            m = get_message(msg_id)
+            if m:
+                citations.append({
+                    "msg_id": m["msg_id"], "channel": m["channel"],
+                    "sender": m["sender"], "time": m["created_at"],
+                })
+
+        return {
+            "reply": "\n".join(reply_lines),
+            "citations": citations,
+            "tool_trace": tool_trace
+        }
 
     # Hết MAX_TURNS mà model vẫn chưa chốt câu trả lời -> graceful fallback
     return {

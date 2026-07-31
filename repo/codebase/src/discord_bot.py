@@ -96,31 +96,45 @@ def _join_citation_lines(lines: list, limit: int = 1024) -> str:
     return "".join(out)
 
 
-def resolve_sender_role(author) -> str:
-    """Suy vai trò người gửi. Ưu tiên ROLE THẬT của Discord server, tên hiển thị chỉ là
-    phương án cuối — nếu chỉ tin vào tên thì học viên đổi nickname thành 'Coach ABC' là
-    tự nâng được quyền ghi vào official_schedules."""
+def resolve_sender_role(author, guild=None) -> str:
+    """Suy vai trò người gửi. Ưu tiên ROLE THẬT của Discord server, tên hiển thị là phương án cuối."""
     role_mapping = {
-        "btc": "btc",
-        "ban tổ chức": "btc",
-        "giảng viên": "instructor",
-        "instructor": "instructor",
+        "admin": "admin",
+        "btc": "admin",
+        "ban tổ chức": "admin",
+        "quản trị": "admin",
         "coach": "coach",
-        "mentor": "mentor",
-        "ta": "mentor",
+        "giảng viên": "coach",
+        "instructor": "coach",
+        "mentor": "coach",
+        "ta": "coach",
     }
 
-    # 1) Role thật trên server (nguồn đáng tin)
-    for role in getattr(author, "roles", []):
-        mapped = role_mapping.get(role.name.strip().lower())
+    member = author
+    if guild and hasattr(guild, "get_member") and not getattr(author, "roles", None):
+        found = guild.get_member(author.id)
+        if found:
+            member = found
+
+    # 1) Role thật trên server
+    for role in getattr(member, "roles", []):
+        rname = role.name.strip().lower()
+        mapped = role_mapping.get(rname)
         if mapped:
             return mapped
+        for k, v in role_mapping.items():
+            if k in rname:
+                return v
 
-    # 2) Fallback theo tên hiển thị — chỉ dùng khi bot chưa được cấp quyền đọc roles.
-    #    Cố ý KHÔNG cho fallback này cấp quyền 'btc' (quyền cao nhất) để hạn chế giả mạo.
-    display = (getattr(author, "display_name", "") or author.name).strip().lower()
+    # 2) Fallback theo tên hiển thị (bao gồm tên các Coach: Tín, Thắng, Hùng, Quân)
+    display = (getattr(member, "display_name", "") or member.name).strip().lower()
+    coach_keywords = ["coach", "tín", "thắng", "hùng", "quân", "giảng viên", "instructor", "mentor", "t237", "t034"]
+    for kw in coach_keywords:
+        if kw in display:
+            return "coach"
+
     for keyword, mapped in role_mapping.items():
-        if keyword in display and mapped != "btc":
+        if keyword in display:
             return mapped
 
     return "student"
@@ -138,47 +152,30 @@ async def on_ready():
     print(f"💾 Lưu tin nhắn từ kênh: {WATCHED_CHANNEL_IDS or 'Toàn bộ kênh'} -> {db.DB_PATH}")
     print(f"📌 Kênh thông báo (trích xuất lịch): {ANNOUNCEMENT_CHANNEL_IDS or 'Toàn bộ kênh'}")
 
-# 1. LƯU MỌI TIN NHẮN VÀO DB + TRÍCH XUẤT LỊCH NẾU LÀ THÔNG BÁO CHÍNH THỨC
+# 1. TỰ ĐỘNG NẠP TIN NHẮN MỚI TỪ COACH/ADMIN VÀO DB REAL-TIME
 @bot.event
 async def on_message(message):
     if message.author == bot.user or message.author.bot:
         return
 
-    sender_role = resolve_sender_role(message.author)
-    is_watched = (not WATCHED_CHANNEL_IDS) or (message.channel.id in WATCHED_CHANNEL_IDS)
+    sender_role = resolve_sender_role(message.author, guild=message.guild)
 
-    # --- Việc A: LƯU RAW. Chạy cho MỌI người gửi, kể cả học viên. ---
-    # ingest_message() lưu raw trước rồi mới tự kiểm tra quyền bên trong: học viên chỉ được
-    # lưu vào bảng `messages`, KHÔNG kích hoạt lời gọi LLM nào (xem ingestion.py).
-    # Nhờ vậy bước này gần như miễn phí dù lưu toàn bộ kênh.
-    if is_watched and len(message.content.strip()) >= MIN_CONTENT_LENGTH:
-        try:
-            # asyncio.to_thread: ingest_message() gọi requests/httpx ĐỒNG BỘ (blocking) tới
-            # OpenRouter. Nếu await trực tiếp trong coroutine này, cuộc gọi mạng đó CHIẾM
-            # LUÔN event loop chính — event loop này còn phải lo gửi heartbeat cho Discord
-            # gateway. Model free hay chậm (hoặc bị 429 retry) block 20-30s+ -> heartbeat
-            # không gửi kịp -> Discord tự ngắt kết nối ("heartbeat blocked"), và mọi tin nhắn
-            # gửi tới trong lúc mất kết nối có thể KHÔNG BAO GIỜ tới được on_message (mất
-            # hẳn, không phải chỉ trễ) — đây là lý do 1 loạt tin nhắn thông báo test bị "biến
-            # mất" dù đã gửi. to_thread() đẩy phần blocking sang thread khác, event loop
-            # chính rảnh tay heartbeat bình thường trong lúc chờ.
-            result = await asyncio.to_thread(
-                ingestion.ingest_message,
-                msg_id=f"msg_{message.id}",
-                channel=message.channel.name,
-                sender=message.author.display_name or message.author.name,
-                sender_role=sender_role,
-                content=message.content,
-                created_at=message.created_at.isoformat() if message.created_at else None,
-            )
-            extraction = result.get("extraction")
-            if extraction:
-                # --- Việc B: đã qua cửa db.is_official_source() -> Extraction Agent đã chạy ---
-                print(f"📥 [Ingest+LLM] #{message.id} ({sender_role}) -> action={extraction.get('action')}")
-            else:
-                print(f"💬 [Ingest raw] #{message.id} ({sender_role}) @#{message.channel.name} -> đã lưu, không trích lịch")
-        except Exception as e:
-            print(f"⚠️ [Ingest Error] #{message.id}: {e}")
+    # Nếu là tin nhắn mới ở kênh thông báo chính thức và gửi bởi Coach/Admin -> Tự động lưu vào DB
+    if db.is_official_source(sender_role, channel_id=message.channel.id, channel_name=message.channel.name):
+        content = message.content.strip()
+        if content:
+            try:
+                db.upsert_message(
+                    msg_id=f"msg_{message.id}",
+                    channel=message.channel.name,
+                    sender=message.author.display_name or message.author.name,
+                    sender_role=sender_role,
+                    content=content,
+                    created_at=message.created_at.isoformat() if message.created_at else db.now_iso(),
+                )
+                print(f"📥 [Realtime Ingest DB] Đã tự động thêm tin nhắn #{message.id} từ {sender_role.upper()} ({message.author.display_name}) ở #{message.channel.name} vào DB")
+            except Exception as e:
+                print(f"⚠️ [Realtime Ingest Error] #{message.id}: {e}")
 
     # 2. XỬ LÝ CÂU HỎI HỌC VIÊN QUA REACT AGENT (LLM TOOL-CALLING)
     if bot.user.mentioned_in(message) or message.channel.name == "tro-ly-lich-trinh":

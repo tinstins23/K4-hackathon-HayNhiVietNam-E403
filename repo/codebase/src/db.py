@@ -32,40 +32,45 @@ _env_db_path = os.getenv("DB_PATH") or "schedules.db"
 DB_PATH = _env_db_path if os.path.isabs(_env_db_path) else os.path.join(_SRC_DIR, _env_db_path)
 
 ROLE_PRIORITY = {
+    "admin": 4,
     "btc": 4,
-    "instructor": 3,
     "coach": 3,
-    "mentor": 2,
+    "instructor": 3,
+    "mentor": 3,
     "student": 1,
 }
 
-# Kênh được coi là nguồn thông báo chính thức -> mới được trích xuất thành lịch.
-# Đặt qua biến môi trường OFFICIAL_CHANNELS (phân cách bằng dấu phẩy) để khớp tên kênh
-# THẬT trên server Discord. Nếu tên ở đây không khớp tên kênh thật thì sẽ không có lịch
-# nào được trích xuất, mà cũng KHÔNG có lỗi nào hiện ra — rất khó phát hiện.
-_DEFAULT_OFFICIAL_CHANNELS = "thong-bao-chung,lich-hoc-moi"
-OFFICIAL_CHANNELS = {
-    c.strip().lower()
-    for c in (os.getenv("OFFICIAL_CHANNELS") or _DEFAULT_OFFICIAL_CHANNELS).split(",")
-    if c.strip()
+# Kênh được coi là nguồn thông báo chính thức -> lọc trực tiếp theo ID trong .env
+OFFICIAL_CHANNEL_IDS = {
+    int(c.strip())
+    for c in (os.getenv("ANNOUNCEMENT_CHANNEL_IDS") or os.getenv("WATCHED_CHANNEL_IDS") or "").split(",")
+    if c.strip().isdigit()
 }
+OFFICIAL_CHANNELS = OFFICIAL_CHANNEL_IDS
 
-# Vai tối thiểu để tin nhắn được coi là nguồn chính thức.
-MIN_OFFICIAL_ROLE = "mentor"
+# Vai tối thiểu để tin nhắn được coi là nguồn chính thức (Coach hoặc Admin).
+MIN_OFFICIAL_ROLE = "coach"
 
 
-def is_official_source(sender_role: str, channel: str) -> bool:
+def normalize_channel_name(name: str) -> str:
+    """Chuẩn hoá tên kênh (bỏ dấu #, chuyển chữ thường, strip)."""
+    if not name:
+        return ""
+    return name.strip().lstrip("#").lower()
+
+
+def is_official_source(sender_role: str, channel_id: int = None, channel_name: str = None) -> bool:
     """Tin nhắn này có đáng tin để coi là NGUỒN SỰ THẬT về lịch không?
-
-    Định nghĩa duy nhất cho cả 2 việc, để 2 chỗ không tự suy lại logic rồi lệch nhau:
-      1. `ingestion._should_ingest` — có gọi Extraction Agent ghi vào official_schedules không
-      2. field `is_official` trả kèm mỗi tin nhắn — để agent/Discord embed phân biệt
-         "trích dẫn nguồn sự thật" với "tin nhắn học viên nhắc tới, chưa xác thực"
+    Lọc bắt buộc theo Channel ID từ biến môi trường ANNOUNCEMENT_CHANNEL_IDS.
     """
-    return (
-        (channel or "").strip().lower() in OFFICIAL_CHANNELS
-        and ROLE_PRIORITY.get(sender_role, 0) >= ROLE_PRIORITY[MIN_OFFICIAL_ROLE]
-    )
+    if OFFICIAL_CHANNEL_IDS and channel_id is not None:
+        try:
+            if int(channel_id) not in OFFICIAL_CHANNEL_IDS:
+                return False
+        except (ValueError, TypeError):
+            pass
+
+    return ROLE_PRIORITY.get(sender_role, 0) >= ROLE_PRIORITY[MIN_OFFICIAL_ROLE]
 
 
 def _with_trust(row) -> dict:
@@ -152,6 +157,18 @@ def init_db():
             created_at TEXT NOT NULL
         )
         """)
+
+
+def reset_db():
+    """Xoá sạch toàn bộ dữ liệu trong DB (messages, official_schedules, personal_busy_slots, idempotency_locks)
+    để nạp lại từ đầu (sync lại từ Discord), tránh lệch dữ liệu giữa các môi trường local."""
+    init_db()
+    with get_conn() as conn:
+        conn.execute("DELETE FROM official_schedules")
+        conn.execute("DELETE FROM messages")
+        conn.execute("DELETE FROM personal_busy_slots")
+        conn.execute("DELETE FROM idempotency_locks")
+
 
 
 def try_claim(lock_key: str) -> bool:

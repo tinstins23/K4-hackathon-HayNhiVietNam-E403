@@ -23,7 +23,6 @@ if CODEBASE_SRC not in sys.path:
     sys.path.insert(0, CODEBASE_SRC)
 
 import db
-import seed_data
 import agent
 
 GOLDEN_SET_PATH = os.path.join(os.path.dirname(__file__), "golden_set.json")
@@ -37,8 +36,8 @@ CRITERIA_MAP = {
 }
 
 def run_evaluation():
-    # 1. Initialize DB & Seed Data
-    seed_data.seed_deterministic_data()
+    # 1. Initialize DB
+    db.init_db()
 
     # 2. Load Golden Set
     with open(GOLDEN_SET_PATH, "r", encoding="utf-8") as f:

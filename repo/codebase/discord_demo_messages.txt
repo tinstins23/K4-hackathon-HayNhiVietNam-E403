@@ -1,0 +1,53 @@
+==================================================
+LƯU Ý ROLE TRÊN DISCORD SERVER: CHỈ CÓ 2 ROLE CHÍNH THỨC DƯỚI ĐÂY:
+  1. Admin  (Dành cho Ban tổ chức / Quản trị viên)
+  2. Coach  (Dành cho các Coach: Quân, Hùng, Tín)
+==================================================
+
+==================================================
+KÊNH 1: #thong-bao-chung (Đăng bằng nick có Role "Admin" hoặc "Coach")
+==================================================
+
+[Tin 1 - Role: Admin | Nick: Admin BTC]
+KHAI MẠC HACKATHON BATCH 03: Phát đề bài và phát động CP1 Chốt Canvas (09:00 - 11:30 ngày 1).
+
+[Tin 2 - Role: Coach | Nick: Coach Tín]
+Buổi học Live chiều Thứ 4 tuần này (2026-07-31, 14:00 - 16:30) học về ReAct Engine & Function Calling.
+
+[Tin 3 - Role: Admin | Nick: Admin BTC]
+LƯU Ý HẠN NỘP BÀI CP4: Hạn cứng nộp file spec.md là đúng 23:59 hôm nay (2026-07-30).
+
+[Tin 4 - Role: Coach | Nick: Coach Tín]
+LỊCH WEEK 2: Thứ 2 tới (2026-08-03, 09:00 - 11:30) khởi động Module 4 - Agentic RAG & GraphRAG. Hạn nộp Bài Lab 4 vào 23:59 Thứ 6 (2026-08-07).
+
+[Tin 5 - Role: Admin | Nick: Admin BTC]
+Hạn chốt nộp Đề xuất Đồ án Tốt nghiệp Capstone là 23:59 ngày 2026-08-15.
+
+[Tin 6 - Role: Admin | Nick: Admin BTC]
+LỄ BẾ MẠC & DEMO DAY CAPSTONE: Diễn ra vào 18:00 - 21:00 ngày 2026-08-28 tại Discord Stage & Offline.
+
+
+==================================================
+KÊNH 2: #lich-hoc-moi (Đăng bằng nick có Role "Coach" hoặc "Admin")
+==================================================
+
+[Tin 7 - Role: Coach | Nick: Coach Hùng]
+LỊCH MENTORING: Buổi Mentoring Chấm CP2 sẽ diễn ra lúc 15:00 - 16:30 hôm nay (2026-07-30) tại Discord Voice 1.
+
+[Tin 8 - Role: Coach | Nick: Coach Quân]
+WORKSHOP TỰ CHỌN: 'Kỹ năng Prompting Nâng Cao' diễn ra sáng Thứ 7 (2026-08-01, 09:30 - 11:30).
+
+[Tin 9 - Role: Coach | Nick: Coach Hùng]
+THAY ĐỔI LỊCH MENTORING: Buổi Mentoring Chấm CP2 chiều nay diễn ra lúc 17:00 - 18:00 tại Discord Voice 1 (2026-07-30).
+
+[Tin 10 - Role: Coach | Nick: Coach Quân]
+LỊCH CP5: Chiều Thứ 5 (2026-07-31, 14:00 - 16:00) tiến hành Dry Run tại Voice 2.
+
+[Tin 11 - Role: Admin | Nick: Admin BTC]
+THÔNG BÁO HỦY LỊCH: Do server Discord bảo trì định kỳ, buổi Workshop tự chọn 'Kỹ năng Prompting Nâng Cao' sáng Thứ 7 (2026-08-01, 09:30 - 11:30) ĐÃ BỊ HỦY.
+
+[Tin 12 - Role: Coach | Nick: Coach Hùng]
+LỊCH TUẦN 2: Mở thêm slot 1-on-1 Code Review & Fix bug với Coach vào 15:00 - 16:30 Thứ 4 (2026-08-05) tại Discord Voice 3.
+
+[Tin 13 - Role: Admin | Nick: Admin BTC]
+WORKSHOP THÁNG 8: Session Định hướng Sự nghiệp & Review CV 1-1 với Coach diễn ra vào 19:30 - 21:30 ngày 2026-08-20 trên Discord Stage.

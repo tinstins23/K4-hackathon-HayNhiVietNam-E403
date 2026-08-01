@@ -1,16 +1,7 @@
 """
-main.py — FastAPI backend cho Trợ lý AI Sắp Xếp Lịch Trình Discord.
+main.py — FastAPI backend (messages-only).
 
 Chạy:  uvicorn main:app --reload --port 8000
-Docs:  http://localhost:8000/docs
-
-Endpoints:
-  POST /ingest          — nạp 1 tin nhắn (bot Discord thật hoặc script seed gọi vào đây)
-  POST /chat             — học viên hỏi, trả lời bằng ReAct Agent (đây là "lời gọi AI thật"
-                            thay thế hoàn toàn phần setTimeout hardcode trong mock_ui)
-  GET  /messages/{channel} — lấy lịch sử tin nhắn 1 kênh (để UI render thay vì channelsData cứng)
-  GET  /schedules         — xem nhanh toàn bộ lịch đã trích xuất (debug/demo)
-  GET  /health
 """
 import os
 from typing import Optional, List
@@ -23,7 +14,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 import db
-import ingestion
 import agent
 
 db.init_db()
@@ -57,8 +47,8 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     reply: str
-    citations: list           # nguồn chính thức — trích dẫn được
-    references: list = []     # tin nhắn học viên — ngữ cảnh, chưa xác thực
+    citations: list
+    references: list = []
     tool_trace: list
 
 
@@ -69,20 +59,16 @@ def health():
 
 @app.post("/ingest")
 def ingest(req: IngestRequest):
-    try:
-        result = ingestion.ingest_message(
-            msg_id=req.msg_id, channel=req.channel, sender=req.sender,
-            sender_role=req.sender_role, content=req.content,
-            created_at=req.created_at, is_edited=req.is_edited,
-        )
-    except RuntimeError as e:
-        raise HTTPException(status_code=502, detail=str(e))
-    return result
+    """Lưu 1 tin nhắn raw vào bảng messages (không extract lịch)."""
+    return db.upsert_message(
+        msg_id=req.msg_id, channel=req.channel, sender=req.sender,
+        sender_role=req.sender_role, content=req.content,
+        created_at=req.created_at, is_edited=req.is_edited,
+    )
 
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(req: ChatRequest):
-    # Giờ VN (UTC+7), không dùng UTC trực tiếp — xem ghi chú trong discord_bot.py/ingestion.py.
     ref_date = req.reference_date or db.vn_now().strftime("%Y-%m-%dT%H:%M:%S")
     try:
         result = agent.ask(
@@ -97,12 +83,6 @@ def chat(req: ChatRequest):
 @app.get("/messages/search")
 def messages_search(keyword: str, channel: str = None, limit: int = 20,
                      sender_role: str = None, only_official: bool = None):
-    """Tra cứu tin nhắn đã lưu — gồm cả tin nhắn học viên.
-
-    Dùng để kiểm tra dữ liệu đã vào DB đúng chưa mà không cần mở Discord:
-      GET /messages/search?keyword=deadline
-      GET /messages/search?keyword=deadline&only_official=false   (chỉ tin nhắn học viên)
-    """
     return db.search_messages(
         keyword, channel=channel, limit=limit,
         sender_role=sender_role, only_official=only_official,
@@ -111,7 +91,6 @@ def messages_search(keyword: str, channel: str = None, limit: int = 20,
 
 @app.get("/messages/stats")
 def messages_stats():
-    """Đếm tin nhắn theo kênh + vai trò, kèm nhãn tin cậy."""
     with db.get_conn() as conn:
         rows = conn.execute(
             """SELECT channel, sender_role, COUNT(*) AS count FROM messages
@@ -121,7 +100,7 @@ def messages_stats():
         "db_path": db.DB_PATH,
         "total": sum(r["count"] for r in rows),
         "breakdown": [
-            {**dict(r), "is_official": db.is_official_source(r["sender_role"], r["channel"])}
+            {**dict(r), "is_official": db.is_official_source(r["sender_role"], channel_name=r["channel"])}
             for r in rows
         ],
     }
@@ -130,8 +109,3 @@ def messages_stats():
 @app.get("/messages/{channel}")
 def messages(channel: str, limit: int = 50):
     return db.list_messages(channel, limit=limit)
-
-
-@app.get("/schedules")
-def schedules(status: str = "active"):
-    return db.query_schedules(status=status)

@@ -22,8 +22,17 @@ CODEBASE_SRC = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "co
 if CODEBASE_SRC not in sys.path:
     sys.path.insert(0, CODEBASE_SRC)
 
+try:
+    from dotenv import load_dotenv
+    _eval_dir = os.path.dirname(os.path.abspath(__file__))
+    _repo_dir = os.path.abspath(os.path.join(_eval_dir, ".."))
+    load_dotenv(os.path.join(_repo_dir, "codebase", ".env"))
+    load_dotenv(os.path.join(_repo_dir, ".env"))
+    load_dotenv()
+except ImportError:
+    pass
+
 import db
-import seed_data
 import agent
 
 GOLDEN_SET_PATH = os.path.join(os.path.dirname(__file__), "golden_set.json")
@@ -37,8 +46,8 @@ CRITERIA_MAP = {
 }
 
 def run_evaluation():
-    # 1. Initialize DB & Seed Data
-    seed_data.seed_deterministic_data()
+    # 1. Initialize DB
+    db.init_db()
 
     # 2. Load Golden Set
     with open(GOLDEN_SET_PATH, "r", encoding="utf-8") as f:
